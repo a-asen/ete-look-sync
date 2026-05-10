@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local env / state
+.env
+.env.local
+*.sqlite
+*.sqlite-journal
