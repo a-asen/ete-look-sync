@@ -61,7 +61,7 @@ Tests live next to each module as `*.test.ts` using `node:test` + `tsx`.
 |---|---|---|
 | Runtime | Node 22 LTS | Native `fetch`, native `--watch`, `node:util.parseArgs`, stable |
 | Language | TypeScript (strict) | Catch shape errors at compile time; good ergonomic match for OWA's nested JSON |
-| Package mgr | `pnpm` | Faster, stricter dep hoisting; cheap to switch to npm later if you prefer |
+| Package mgr | `npm` | Already used by `ete-stethic`; keeps tooling consistent across your repos |
 | Browser auth | `playwright` | Same library as the Python version — port is mostly mechanical |
 | HTTP | native `fetch` | Built into Node 22; no `axios`/`undici` wrapper needed |
 | SQLite | `better-sqlite3` | Synchronous, prepared-statement-friendly; ideal for our short CLI runs |
