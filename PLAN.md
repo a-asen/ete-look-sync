@@ -5,8 +5,11 @@ A Node/TypeScript rewrite of [`etesync-outlook-calendar-scraper-sync`](https://g
 EteSync calendar — but built around the actively-maintained `etebase` npm SDK
 instead of the abandoned Python `etebase` package.
 
-This file is the roadmap. As phases land it gets pruned; once the rewrite
-ships, it's deleted in favour of the README.
+> **Status: all 15 phases (0–14) complete.** This file is kept for
+> historical reference; user-facing docs now live in
+> [`README.md`](README.md), operational notes in
+> [`CLAUDE.md`](CLAUDE.md). The phase plan + module map below
+> describe what shipped, not what's pending.
 
 ---
 

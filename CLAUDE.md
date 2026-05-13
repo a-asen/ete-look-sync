@@ -25,7 +25,13 @@ have to re-derive.
 | 11. Orchestrator + CLI subcommands | ✅ done |
 | 12. Systemd timer | ✅ done |
 | 13. Docs (README + config example + service example) | ✅ done |
-| **14. Migration tool (import legacy events.sqlite)** | **← next** |
+| 14. Migration tool (import legacy events.sqlite) | ✅ done |
+
+**All phases complete.** Next session's work is whatever the user
+runs into when actually cutting over from the Python tool — bug
+fixes, polish, real-world quirks the unit tests didn't catch.
+[`README.md`](README.md) is now the canonical user-facing entry
+point; [`PLAN.md`](PLAN.md) is kept as historical reference.
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -107,29 +113,34 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 14 (migration) — what to read before starting
+## Cutover playbook (when you actually switch over)
 
-One-shot importer: read the Python tool's `events.sqlite` and
-populate the new schema so cutover preserves push history.
+Mirroring PLAN.md → "Cutover criteria":
 
-Mapping:
-- `item_id`     → `item_id`         (unchanged; primary key)
-- `change_key`  → `change_key`
-- `content_hash` → `content_hash`   (must remain valid — that's why
-  parse + ICS parity is pinned in tests)
-- `caldav_uid`  → `caldav_uid`
-- `caldav_href` → `remote_id`       (CalDAV-only legacy)
-- `caldav_etag` → `remote_etag`
-- start_iso, subject, last_modified_iso, first_seen_at, last_seen_at,
-  last_pushed_at, push_error → carry over verbatim.
-- `backend`     → `"caldav"`        (legacy rows were all CalDAV)
-- `record_json` is rebuilt from the legacy column values where
-  possible, else default-filled.
+1. Stop the Python timer:
+   `systemctl --user disable --now outlook-sync.timer` (in the
+   Python repo's deployment) so it doesn't fight the new tool.
+2. Copy `~/.local/state/outlook-sync/events.sqlite` somewhere safe
+   (e.g. `events.sqlite.legacy-backup`) before doing anything.
+3. From a checkout of this repo: `npm install && npm run build &&
+   npm install -g .`.
+4. `outlook-sync login` (Microsoft auth).
+5. `outlook-sync login-etebase` (or fill in `[caldav]`).
+6. `outlook-sync migrate-legacy
+   ~/.local/state/outlook-sync/events.sqlite.legacy-backup` — this
+   fails loudly if hash parity broke since the parity tests were
+   pinned. Aborts the migration without touching the new DB if it
+   can't guarantee a no-op first sync.
+7. `outlook-sync sync-once --dry-run` should now report
+   `nothing to do` (or a small delta if events actually changed
+   upstream between the last Python run and this point).
+8. `outlook-sync sync-once` to make the first real push, then
+   `outlook-sync setup-timer` to install the new periodic timer.
 
-Wire as a `migrate-legacy` (or `import-legacy`) CLI subcommand that
-takes the legacy DB path. After import, on the next sync the TS
-hash must equal the stored hash → row stays unchanged → no
-re-push.
+If steps 6 / 7 misbehave, the Python tool is still installed and the
+backed-up `events.sqlite.legacy-backup` lets you revert to it
+verbatim — nothing about the migration is destructive to the
+legacy DB.
 
 **Carrying over from earlier phases (the runtime contract):**
 - `auth/session.callService(session, cfg, action, body)` is the

@@ -22,6 +22,7 @@ import { capture } from "./auth/capture.js";
 import { loadConfig } from "./config.js";
 import { runEtebaseLogin } from "./etebase_login.js";
 import { setupLogging } from "./log.js";
+import { migrateLegacy } from "./migrate.js";
 import { runProbe } from "./probe.js";
 import { Store } from "./store.js";
 import { renderAllEvents } from "./sync/ics.js";
@@ -140,6 +141,24 @@ async function main(argv: readonly string[]): Promise<number> {
     .action(async () => {
       const code = await runRemoveTimer();
       process.exit(code);
+    });
+
+  program
+    .command("migrate-legacy")
+    .description("Import the Python predecessor's events.sqlite into this store.")
+    .argument("<legacy-db>", "Path to the legacy events.sqlite (e.g. ~/.local/state/outlook-sync/events.sqlite).")
+    .option("--force", "Merge into a non-empty target store instead of refusing.")
+    .option("--skip-parity-check", "Skip the content_hash sanity check (use only if you know why).")
+    .action((legacyDb: string, opts: { force?: boolean; skipParityCheck?: boolean }) => {
+      const migrateOpts: Parameters<typeof migrateLegacy>[2] = {};
+      if (opts.force) migrateOpts.force = true;
+      if (opts.skipParityCheck) migrateOpts.skipParityCheck = true;
+      const result = migrateLegacy(legacyDb, loadConfig(), migrateOpts);
+      process.stdout.write(
+        `[migrate] imported ${result.imported} row(s), ${result.hashMismatches} hash mismatch(es), ` +
+          `${result.recordJsonErrors} record_json error(s)\n`,
+      );
+      process.exit(result.hashMismatches > 0 ? 1 : 0);
     });
 
   await program.parseAsync(argv);
