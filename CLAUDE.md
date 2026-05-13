@@ -19,8 +19,9 @@ have to re-derive.
 | 5. Fetch (OWA FindItem + GetItem → Event) | ✅ done |
 | 6. Differ (freeze-past + window-scoped delete rules) | ✅ done |
 | 7. ICS render (Event → iCalendar bytes) | ✅ done |
-| **8. Backend interface + factory** | **← next** |
-| 9+. CalDAV / Etebase backends / CLI / timer / docs / migration | not started |
+| 8. Backend interface + factory | ✅ done |
+| **9. CalDAV backend (tsdav)** | **← next** |
+| 10+. Etebase backend / CLI / timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -102,29 +103,29 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 8 (backend interface) — what to read before starting
+## Phase 9 (CalDAV backend) — what to read before starting
 
 Reference Python source:
-`outlook-calendar-scraper-sync/src/outlook_sync/sync/backend.py`.
+`outlook-calendar-scraper-sync/src/outlook_sync/sync/caldav_writer.py`.
 
-The `Backend` interface is the seam between the orchestrator (which
-owns the diff + store) and a concrete protocol (CalDAV in phase 9,
-Etebase in phase 10). At minimum it needs to:
+This is the first concrete `Backend` implementation. It wraps `tsdav`
+so the rest of the codebase deals in `Event` objects, never with
+PROPFIND or DAV resource paths. Two URL shapes both work, mirroring
+the Python version:
 
-- open / authenticate (per backend type)
-- create an item from an ICS payload, returning (remoteId, remoteEtag)
-- update an item by (remoteId, remoteEtag), returning new etag
-- delete an item by (remoteId, remoteEtag), tolerating "already gone"
+1. `caldavUrl` is a *direct calendar URL* (what etesync-dav exposes
+   per calendar) — bind straight to it.
+2. `caldavUrl` is a principal/server URL plus `caldavCalendarName` —
+   discover the matching calendar via principal/calendar-home.
 
-Plus a factory `openBackend(cfg)` that picks CalDAV vs Etebase from
-`cfg.backend`. The interface should be thin enough that both real
-backends and the orchestrator's tests can implement it without
-contortions.
+Path #1 is preferred (no PROPFIND, works even when principal discovery
+isn't fully wired in etesync-dav). The Python tool's "tombstone-retry
+behaviour" (PLAN.md) needs preservation: if a PUT 412s because an
+older tombstone is still around, the writer re-issues with a fresh
+UID. Pin that against a fake DAV server in tests.
 
-No on-disk state belongs in this phase — that arrives with each
-concrete backend. The store's `remote_id` / `remote_etag` / `backend`
-columns already exist and are the only persistence layer the
-interface needs to know about.
+`tsdav` adds the only new runtime dep this phase. Justify it in the
+commit message.
 
 **Carrying over from earlier phases:**
 - Bearer JSON key set is fixed (`token`, `expires_on`, `tenant_id`,
@@ -140,6 +141,8 @@ interface needs to know about.
   `computeDiff(freshEvents, store.iterRows(), { fetchStart, fetchEnd })`.
 - `sync/ics.renderEvent(event)` returns a complete VCALENDAR string;
   pass `{ now }` in tests to pin DTSTAMP.
+- `sync/backend.Backend` is the interface to implement;
+  `sync/backend.openBackend(cfg)` is the factory to wire up.
 
 ---
 
