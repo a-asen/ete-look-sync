@@ -1,0 +1,97 @@
+# outlook-sync configuration example
+#
+# Copy this file to ~/.config/outlook-sync/config.toml and fill in
+# your values:
+#
+#   mkdir -p ~/.config/outlook-sync
+#   cp config-example.toml ~/.config/outlook-sync/config.toml
+#   chmod 600 ~/.config/outlook-sync/config.toml
+#
+# Every setting also has an environment variable (named
+# `OUTLOOK_SYNC_<SECTION>_<KEY>`, all caps). Env vars always win
+# over this file, which is useful for one-off overrides without
+# editing it.
+
+# ---------------------------------------------------------------------
+# Outlook / OWA
+# ---------------------------------------------------------------------
+[owa]
+
+# Base URL of the Outlook Web App tenant. The default matches
+# what `login` ends up landing on; only change this if your tenant
+# uses a custom Outlook host.
+# Env: OUTLOOK_SYNC_OWA_URL
+base_url = "https://outlook.cloud.microsoft"
+
+# ---------------------------------------------------------------------
+# Sync window, freeze-past, timer cadence
+# ---------------------------------------------------------------------
+[sync]
+
+# Which backend to push to: "etebase" or "caldav".
+# Env: OUTLOOK_SYNC_BACKEND
+backend = "etebase"
+
+# Rolling window used by every regular `sync-once` run.
+# Env: OUTLOOK_SYNC_DAYS_BACK / OUTLOOK_SYNC_DAYS_FORWARD
+days_back    = 7    # past days to re-check on each run
+days_forward = 365  # future days to fetch
+
+# Events whose start date is older than this many days are
+# "frozen": never updated or deleted even if Exchange changes
+# them. Protects your historical record from back-dated
+# corrections and accidental deletes. Use --no-freeze-past on a
+# one-off `sync-once` if you want to backfill history.
+# Env: OUTLOOK_SYNC_FREEZE_PAST_DAYS
+freeze_past_days = 2
+
+# How often the systemd timer fires, in minutes. Read by
+# `setup-timer` when it generates the unit files.
+# Env: OUTLOOK_SYNC_INTERVAL_MINUTES
+interval_minutes = 30
+
+# ---------------------------------------------------------------------
+# Etebase backend (default)
+# ---------------------------------------------------------------------
+[etebase]
+
+# Etebase server URL. The public hosted instance is api.etebase.com;
+# point this at your own host if you're self-hosting EteSync.
+# Env: OUTLOOK_SYNC_ETEBASE_SERVER_URL
+server_url = "https://api.etebase.com"
+
+# Etebase username — used only for diagnostics and as the prompt
+# default in `login-etebase`. Not required for sync.
+# Env: OUTLOOK_SYNC_ETEBASE_USERNAME
+username = ""
+
+# Collection UID to push events into. Run `outlook-sync
+# login-etebase` once; it lists your collections and prints the
+# UID for you to paste here.
+# Env: OUTLOOK_SYNC_ETEBASE_COLLECTION_UID
+collection_uid = ""
+
+# ---------------------------------------------------------------------
+# CalDAV backend (optional)
+# ---------------------------------------------------------------------
+# Only used when backend = "caldav".
+[caldav]
+
+# Direct calendar URL (preferred for etesync-dav, which exposes
+# one URL per calendar). Alternatively point this at a
+# principal/server URL and set `calendar` below to discover the
+# right calendar by display name.
+# Env: OUTLOOK_SYNC_CALDAV_URL
+url = ""
+
+# HTTP Basic-Auth credentials. etesync-dav running locally
+# usually requires the EteSync account username and password.
+# Env: OUTLOOK_SYNC_CALDAV_USERNAME / OUTLOOK_SYNC_CALDAV_PASSWORD
+username = ""
+password = ""
+
+# Optional: calendar display name for name-based discovery. Leave
+# empty when `url` already points directly at a calendar (the
+# common case).
+# Env: OUTLOOK_SYNC_CALDAV_CALENDAR
+# calendar = ""

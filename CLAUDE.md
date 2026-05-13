@@ -24,8 +24,8 @@ have to re-derive.
 | 10. Etebase backend (etebase npm SDK) | ✅ done |
 | 11. Orchestrator + CLI subcommands | ✅ done |
 | 12. Systemd timer | ✅ done |
-| **13. Docs (README + config example + service example)** | **← next** |
-| 14. Migration tool (import legacy events.sqlite) | not started |
+| 13. Docs (README + config example + service example) | ✅ done |
+| **14. Migration tool (import legacy events.sqlite)** | **← next** |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -107,18 +107,29 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 13 (docs) — what to write
+## Phase 14 (migration) — what to read before starting
 
-The PLAN.md list:
-- README — install, login flow (`outlook-sync login` then
-  `outlook-sync login-etebase`), `sync-once`, timer setup.
-- `config-example.toml` — annotated example covering `[owa]`,
-  `[sync]`, `[etebase]`, `[caldav]`.
-- Example systemd service section (the unit text the timer emits +
-  how to view logs).
+One-shot importer: read the Python tool's `events.sqlite` and
+populate the new schema so cutover preserves push history.
 
-When this lands the PLAN.md will be slimmed down or replaced by the
-README; only the migration phase stays after that.
+Mapping:
+- `item_id`     → `item_id`         (unchanged; primary key)
+- `change_key`  → `change_key`
+- `content_hash` → `content_hash`   (must remain valid — that's why
+  parse + ICS parity is pinned in tests)
+- `caldav_uid`  → `caldav_uid`
+- `caldav_href` → `remote_id`       (CalDAV-only legacy)
+- `caldav_etag` → `remote_etag`
+- start_iso, subject, last_modified_iso, first_seen_at, last_seen_at,
+  last_pushed_at, push_error → carry over verbatim.
+- `backend`     → `"caldav"`        (legacy rows were all CalDAV)
+- `record_json` is rebuilt from the legacy column values where
+  possible, else default-filled.
+
+Wire as a `migrate-legacy` (or `import-legacy`) CLI subcommand that
+takes the legacy DB path. After import, on the next sync the TS
+hash must equal the stored hash → row stays unchanged → no
+re-push.
 
 **Carrying over from earlier phases (the runtime contract):**
 - `auth/session.callService(session, cfg, action, body)` is the
