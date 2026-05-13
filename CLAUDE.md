@@ -23,8 +23,9 @@ have to re-derive.
 | 9. CalDAV backend (tsdav) | ✅ done |
 | 10. Etebase backend (etebase npm SDK) | ✅ done |
 | 11. Orchestrator + CLI subcommands | ✅ done |
-| **12. Systemd timer** | **← next** |
-| 13+. docs / migration | not started |
+| 12. Systemd timer | ✅ done |
+| **13. Docs (README + config example + service example)** | **← next** |
+| 14. Migration tool (import legacy events.sqlite) | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -106,44 +107,38 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 12 (systemd timer) — what to read before starting
+## Phase 13 (docs) — what to write
 
-Reference Python source:
-`outlook-calendar-scraper-sync/src/outlook_sync/timer.py`.
+The PLAN.md list:
+- README — install, login flow (`outlook-sync login` then
+  `outlook-sync login-etebase`), `sync-once`, timer setup.
+- `config-example.toml` — annotated example covering `[owa]`,
+  `[sync]`, `[etebase]`, `[caldav]`.
+- Example systemd service section (the unit text the timer emits +
+  how to view logs).
 
-Writes two systemd user units to
-`~/.config/systemd/user/`:
+When this lands the PLAN.md will be slimmed down or replaced by the
+README; only the migration phase stays after that.
 
-  - `outlook-sync.service`  — oneshot `ExecStart=<bin> sync-once`
-  - `outlook-sync.timer`    — `OnCalendar=*:0/<interval_minutes>`,
-    `Persistent=true`
-
-The `<bin>` path needs to resolve to *this* installed CLI; Python
-derives it from `sys.executable`. In Node, derive it from
-`process.execPath` + the location of `dist/cli.js`, or use
-`process.argv[1]` if available. Settle on the simplest path that
-survives `npm link` and a global install (`npm i -g .`).
-
-`remove-timer` mirrors Python: `systemctl --user disable --now`,
-unlink unit files, daemon-reload. Both subcommands should support a
-`--dry-run` mode that prints the unit contents without writing
-anything.
-
-**Carrying over from earlier phases:**
-- Bearer JSON key set is fixed; auth/session.callService is the only
-  path that should hit service.svc.
+**Carrying over from earlier phases (the runtime contract):**
+- `auth/session.callService(session, cfg, action, body)` is the
+  only path to `service.svc`.
 - `fetch/owa.fetchCalendarView(session, cfg, start, end)` is the
-  production entry point; tests use `fetchCalendarViewWith(call, ...)`.
+  production entry; tests use `fetchCalendarViewWith(call, …)`.
 - `sync/differ.computeDiff(events, rows, opts)` is pure logic.
 - `sync/ics.renderEvent(event)` returns a VCALENDAR string.
-- `sync/backend.Backend` is the interface; `openBackend(cfg)` is the
-  factory. Both backends are lazy-imported.
+- `sync/backend.openBackend(cfg)` lazy-imports the configured
+  backend; both `./backends/caldav.js` and `./backends/etebase.js`
+  are wired up.
 - `sync/orchestrator.runSyncOnce(cfg, opts)` and `runFixErrors(cfg,
-  opts)` are the entry points the CLI calls. Both delegate to a
-  `*With(cfg, opts, deps)` variant — tests pass a `SyncDeps` stub.
-- The CLI is `src/cli.ts` (commander-based); the executable bin name
-  is `outlook-sync` (from `package.json#bin`). `dist/cli.js` is what
-  `npm run build` emits and what `npm i -g .` installs.
+  opts)` are the orchestrator entry points; both have `*With`
+  variants that take a `SyncDeps` stub for tests.
+- CLI is `src/cli.ts` (commander). Subcommands:
+  `login`, `login-etebase`, `probe`, `sync-once`, `fix-errors`,
+  `export-ics`, `setup-timer`, `remove-timer`, `diagnose` (stub).
+- `timer.runSetupTimer(cfg, { dryRun? })` writes the systemd units;
+  `runRemoveTimer()` undoes it. The bin path is resolved with
+  `which outlook-sync` and falls back to `process.argv[1]`.
 
 ---
 

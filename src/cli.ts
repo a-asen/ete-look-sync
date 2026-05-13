@@ -26,6 +26,7 @@ import { runProbe } from "./probe.js";
 import { Store } from "./store.js";
 import { renderAllEvents } from "./sync/ics.js";
 import { runFixErrors, runSyncOnce } from "./sync/orchestrator.js";
+import { runRemoveTimer, runSetupTimer } from "./timer.js";
 
 async function main(argv: readonly string[]): Promise<number> {
   const program = new Command()
@@ -121,7 +122,25 @@ async function main(argv: readonly string[]): Promise<number> {
       process.exit(2);
     });
 
-  // setup-timer and remove-timer land in phase 12.
+  program
+    .command("setup-timer")
+    .description("Install a systemd user timer that runs sync-once automatically.")
+    .option("--dry-run", "Print the unit files that would be written without installing them.")
+    .action(async (opts: { dryRun?: boolean }) => {
+      const code = await runSetupTimer(
+        loadConfig(),
+        opts.dryRun ? { dryRun: true } : {},
+      );
+      process.exit(code);
+    });
+
+  program
+    .command("remove-timer")
+    .description("Stop, disable, and delete the installed systemd units.")
+    .action(async () => {
+      const code = await runRemoveTimer();
+      process.exit(code);
+    });
 
   await program.parseAsync(argv);
   return 0;
