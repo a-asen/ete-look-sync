@@ -48,12 +48,16 @@ test("openBackend(etebase) throws BackendConfigError pending phase 10", async ()
   );
 });
 
-test("openBackend(caldav) throws BackendConfigError pending phase 9", async () => {
+test("openBackend(caldav) errors when caldavUrl is unset", async () => {
+  // CalDAVBackend.open requires `caldavUrl` — our `cfg()` helper
+  // builds a Config with an empty URL, so this should fail with a
+  // helpful "url is unset" message rather than crashing on the
+  // network.
   await assert.rejects(
     () => openBackend(cfg("caldav")),
     (err: unknown) => {
       assert.ok(err instanceof BackendConfigError);
-      assert.match((err as Error).message, /phase 9/);
+      assert.match((err as Error).message, /caldav\.url is unset/);
       return true;
     },
   );

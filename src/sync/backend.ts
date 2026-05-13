@@ -75,14 +75,14 @@ export async function openBackend(cfg: Config): Promise<Backend> {
     case "etebase":
       throw new BackendConfigError(
         "Etebase backend is not yet wired up (arrives in phase 10). " +
-          "Set `backend = \"caldav\"` to use CalDAV once phase 9 lands, " +
+          "Set `backend = \"caldav\"` to use CalDAV in the meantime, " +
           "or wait for the Etebase backend.",
       );
-    case "caldav":
-      throw new BackendConfigError(
-        "CalDAV backend is not yet wired up (arrives in phase 9). " +
-          "Set `backend = \"etebase\"` to use Etebase once phase 10 lands, " +
-          "or wait for the CalDAV backend.",
-      );
+    case "caldav": {
+      // Lazy import keeps `tsdav` (the only CalDAV-specific dep) out
+      // of the path of commands that don't push (probe / login).
+      const { CalDAVBackend } = await import("./backends/caldav.js");
+      return CalDAVBackend.open(cfg);
+    }
   }
 }

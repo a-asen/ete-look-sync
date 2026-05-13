@@ -20,8 +20,9 @@ have to re-derive.
 | 6. Differ (freeze-past + window-scoped delete rules) | ✅ done |
 | 7. ICS render (Event → iCalendar bytes) | ✅ done |
 | 8. Backend interface + factory | ✅ done |
-| **9. CalDAV backend (tsdav)** | **← next** |
-| 10+. Etebase backend / CLI / timer / docs / migration | not started |
+| 9. CalDAV backend (tsdav) | ✅ done |
+| **10. Etebase backend (etebase npm SDK)** | **← next** |
+| 11+. CLI / timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -103,29 +104,29 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 9 (CalDAV backend) — what to read before starting
+## Phase 10 (Etebase backend) — what to read before starting
 
-Reference Python source:
-`outlook-calendar-scraper-sync/src/outlook_sync/sync/caldav_writer.py`.
+The Python tool doesn't have an Etebase backend (its PyPI `etebase`
+package no longer builds — that's the whole reason for this
+rewrite). The reference shape is the `Backend` interface and the
+existing CalDAV implementation; PLAN.md picks the npm `etebase`
+package (^0.43) and notes that `ete-stethic` already uses it.
 
-This is the first concrete `Backend` implementation. It wraps `tsdav`
-so the rest of the codebase deals in `Event` objects, never with
-PROPFIND or DAV resource paths. Two URL shapes both work, mirroring
-the Python version:
+Sketch:
+- A `login` subcommand (lands in phase 11 with the CLI) persists a
+  saved Account blob to `cfg.etebaseBlobFile` (mode 600) and the
+  resolved collection UID into config.
+- `EtebaseBackend.open(cfg)` restores the Account from the blob,
+  opens the collection by UID, and binds it to a connected client.
+- Items are stored with the VCALENDAR string as the content and the
+  Exchange itemId as the item-meta UID; the Etebase item UID itself
+  is what we persist as `remote_id`.
+- `remote_etag` maps to the Etebase item's `etag` (it's already an
+  opaque string the SDK round-trips for conditional updates).
 
-1. `caldavUrl` is a *direct calendar URL* (what etesync-dav exposes
-   per calendar) — bind straight to it.
-2. `caldavUrl` is a principal/server URL plus `caldavCalendarName` —
-   discover the matching calendar via principal/calendar-home.
-
-Path #1 is preferred (no PROPFIND, works even when principal discovery
-isn't fully wired in etesync-dav). The Python tool's "tombstone-retry
-behaviour" (PLAN.md) needs preservation: if a PUT 412s because an
-older tombstone is still around, the writer re-issues with a fresh
-UID. Pin that against a fake DAV server in tests.
-
-`tsdav` adds the only new runtime dep this phase. Justify it in the
-commit message.
+Wire `openBackend(cfg)` to dynamic-import `./backends/etebase.js`
+the same way CalDAV does, to keep the `etebase` dep off the path of
+commands that don't push.
 
 **Carrying over from earlier phases:**
 - Bearer JSON key set is fixed (`token`, `expires_on`, `tenant_id`,
@@ -141,8 +142,13 @@ commit message.
   `computeDiff(freshEvents, store.iterRows(), { fetchStart, fetchEnd })`.
 - `sync/ics.renderEvent(event)` returns a complete VCALENDAR string;
   pass `{ now }` in tests to pin DTSTAMP.
-- `sync/backend.Backend` is the interface to implement;
-  `sync/backend.openBackend(cfg)` is the factory to wire up.
+- `sync/backend.Backend` is the interface; `openBackend(cfg)` is the
+  factory. CalDAV is wired up via `./backends/caldav.js`; mirror that
+  pattern for Etebase.
+- `tsdav` is imported as a default + destructure (`import tsdav from
+  "tsdav"; const { createCalendarObject, … } = tsdav;`) because
+  tsx-under-Node-22 wraps its CJS export as a default. The same
+  pattern is likely needed for any other CJS-only dep.
 
 ---
 
