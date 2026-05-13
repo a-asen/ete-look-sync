@@ -15,8 +15,9 @@ have to re-derive.
 | 1. Models + config | ✅ done |
 | 2. Logger | ✅ done |
 | 3. Store | ✅ done |
-| **4. Auth (Playwright + MSAL capture)** | **← next** |
-| 5+. Fetch / differ / ICS / backends / CLI / timer / docs / migration | not started |
+| 4. Auth (Playwright + MSAL capture) | ✅ done |
+| **5. Fetch (OWA FindItem + GetItem → Event)** | **← next** |
+| 6+. Differ / ICS / backends / CLI / timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -95,31 +96,24 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 4 (auth) — what to read before starting
+## Phase 5 (fetch) — what to read before starting
 
 Reference Python sources, in this order:
 
-1. `outlook-calendar-scraper-sync/src/outlook_sync/auth/capture.py` —
-   the Playwright MSAL flow. Watches for OWA's MSAL JS cache writes,
-   extracts the Bearer JWT (`aud = https://outlook.office.com`), saves
-   bearer.json + cookies.json + the user-data dir.
+1. `outlook-calendar-scraper-sync/src/outlook_sync/fetch/owa.py` —
+   `FindItem` paging + chunked `GetItem` against `service.svc`. Lives
+   on top of the session client from phase 4.
 
-2. `outlook-calendar-scraper-sync/src/outlook_sync/auth/session.py` —
-   loads bearer.json, checks expiry, exposes a `requests`-style client.
-   In TS this becomes a thin wrapper around `fetch()` that injects the
-   bearer + cookies on every call.
+2. `outlook-calendar-scraper-sync/src/outlook_sync/fetch/parse.py` —
+   OWA JSON → `Event`. Anything that ends up in `Event.bodyText` or
+   `attendees` crosses the migration boundary (see content-hash note
+   above) and needs cross-language verification.
 
-3. The orchestrator's `_maybe_silent_refresh()` in `sync/orchestrator.py`
-   — runs Playwright headless to refresh the token before sync if it's
-   <2h from expiry. Critical for unattended systemd operation.
-
-**Bearer file format must remain readable by the Python tool** during
-the cutover window: same JSON keys (`access_token`, `expires_on`,
-`anchor_mailbox`, etc.). Don't reorganize.
-
-**Heavy step warning:** phase 4 starts with `npm install playwright`
-followed by `npx playwright install chromium`, which downloads ~200 MB.
-Don't run those in a tight loop.
+**Carrying over from phase 4:** the bearer JSON key set is now fixed
+(`token`, `expires_on`, `tenant_id`, `anchor_mailbox`, `scopes`,
+`cached_at`, `msal_key`) — Python `outlook_sync.auth.session` reads
+the same keys, so don't rename them. `auth/session.callService()` is
+the only path that should hit `service.svc`.
 
 ---
 
