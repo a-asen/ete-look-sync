@@ -16,8 +16,9 @@ have to re-derive.
 | 2. Logger | ✅ done |
 | 3. Store | ✅ done |
 | 4. Auth (Playwright + MSAL capture) | ✅ done |
-| **5. Fetch (OWA FindItem + GetItem → Event)** | **← next** |
-| 6+. Differ / ICS / backends / CLI / timer / docs / migration | not started |
+| 5. Fetch (OWA FindItem + GetItem → Event) | ✅ done |
+| **6. Differ (freeze-past + window-scoped delete rules)** | **← next** |
+| 7+. ICS / backends / CLI / timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -75,7 +76,10 @@ source ~/miniconda3/etc/profile.d/conda.sh && conda activate outlook-sync
 `contentHash()` and `caldavUid()` in `src/models.ts` produce **byte-for-byte
 identical** output to their Python counterparts. This is verified and
 pinned by golden values in `src/models.test.ts` (the `PYTHON_CONTENT_HASH`
-and `PYTHON_CALDAV_UID` constants).
+and `PYTHON_CALDAV_UID` constants) and reinforced by an end-to-end
+parity test in `src/fetch/parse.test.ts` (the `PYTHON_PARSED_*`
+constants) that runs a real OWA dict through both parsers and asserts
+they agree.
 
 **Why this matters:** the migration tool in phase 14 reads the user's
 existing Python `events.sqlite` and imports rows. If TS hashes diverge
@@ -96,24 +100,34 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 5 (fetch) — what to read before starting
+## Phase 6 (differ) — what to read before starting
 
-Reference Python sources, in this order:
+Reference Python source:
+`outlook-calendar-scraper-sync/src/outlook_sync/sync/differ.py`.
 
-1. `outlook-calendar-scraper-sync/src/outlook_sync/fetch/owa.py` —
-   `FindItem` paging + chunked `GetItem` against `service.svc`. Lives
-   on top of the session client from phase 4.
+Two rules that are easy to miss:
+- **freeze-past**: events whose start is older than
+  `cfg.freezePastDays` ago are never updated or deleted, only inserted
+  (protects historical record once a sync has run).
+- **window-scoped delete**: rows present in the store but absent from
+  the latest fetch are only candidates for deletion if their
+  `start_iso` falls inside the current sync window — otherwise we'd
+  delete everything outside the window on every run.
 
-2. `outlook-calendar-scraper-sync/src/outlook_sync/fetch/parse.py` —
-   OWA JSON → `Event`. Anything that ends up in `Event.bodyText` or
-   `attendees` crosses the migration boundary (see content-hash note
-   above) and needs cross-language verification.
+The differ is pure logic (no I/O, no deps); inputs are `Event[]` from
+`fetchCalendarView` and the `StoredRow[] / Map<id, hash>` views the
+`Store` already exposes. Tests should not need fixtures beyond an
+in-process `Store` and hand-built `Event`s.
 
-**Carrying over from phase 4:** the bearer JSON key set is now fixed
-(`token`, `expires_on`, `tenant_id`, `anchor_mailbox`, `scopes`,
-`cached_at`, `msal_key`) — Python `outlook_sync.auth.session` reads
-the same keys, so don't rename them. `auth/session.callService()` is
-the only path that should hit `service.svc`.
+**Carrying over from earlier phases:**
+- The bearer JSON key set is fixed
+  (`token`, `expires_on`, `tenant_id`, `anchor_mailbox`, `scopes`,
+  `cached_at`, `msal_key`); Python's `outlook_sync.auth.session` reads
+  the same keys, so don't rename them. `auth/session.callService()` is
+  the only path that should hit `service.svc`.
+- `fetch/owa.fetchCalendarView(session, cfg, start, end)` is the
+  production entry point; tests use `fetchCalendarViewWith(call, ...)`
+  with an injected `ServiceCaller` so no HTTP is involved.
 
 ---
 
