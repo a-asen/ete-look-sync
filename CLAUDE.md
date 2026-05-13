@@ -18,8 +18,9 @@ have to re-derive.
 | 4. Auth (Playwright + MSAL capture) | ✅ done |
 | 5. Fetch (OWA FindItem + GetItem → Event) | ✅ done |
 | 6. Differ (freeze-past + window-scoped delete rules) | ✅ done |
-| **7. ICS render (Event → iCalendar bytes)** | **← next** |
-| 8+. Backends / CLI / timer / docs / migration | not started |
+| 7. ICS render (Event → iCalendar bytes) | ✅ done |
+| **8. Backend interface + factory** | **← next** |
+| 9+. CalDAV / Etebase backends / CLI / timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -101,28 +102,29 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 7 (ICS render) — what to read before starting
+## Phase 8 (backend interface) — what to read before starting
 
 Reference Python source:
-`outlook-calendar-scraper-sync/src/outlook_sync/sync/ics.py`.
+`outlook-calendar-scraper-sync/src/outlook_sync/sync/backend.py`.
 
-This renders an `Event` into an RFC 5545 VEVENT (used as the body of
-each CalDAV resource and as the payload inside each Etebase item). The
-output crosses the migration boundary: if a re-rendered VEVENT differs
-from what the Python tool last pushed, the Etebase/CalDAV item will
-update on the first sync after cutover. Verify byte-for-byte parity
-with a few real events before committing.
+The `Backend` interface is the seam between the orchestrator (which
+owns the diff + store) and a concrete protocol (CalDAV in phase 9,
+Etebase in phase 10). At minimum it needs to:
 
-Anything the renderer normalises (line folding, DTSTART format,
-escaping of `,` `;` `\n` in TEXT properties, ATTENDEE/ORGANIZER lines)
-needs cross-language pinning the same way `parse.test.ts` pins
-`contentHash`. Tests should not need a backend — render to a string
-and snapshot it.
+- open / authenticate (per backend type)
+- create an item from an ICS payload, returning (remoteId, remoteEtag)
+- update an item by (remoteId, remoteEtag), returning new etag
+- delete an item by (remoteId, remoteEtag), tolerating "already gone"
 
-Library choice from PLAN.md is `ical-generator`. Confirm its output
-matches Python's `icalendar` before adopting; if it doesn't, hand-roll
-the serializer rather than fight the lib (the spec surface we use is
-small).
+Plus a factory `openBackend(cfg)` that picks CalDAV vs Etebase from
+`cfg.backend`. The interface should be thin enough that both real
+backends and the orchestrator's tests can implement it without
+contortions.
+
+No on-disk state belongs in this phase — that arrives with each
+concrete backend. The store's `remote_id` / `remote_etag` / `backend`
+columns already exist and are the only persistence layer the
+interface needs to know about.
 
 **Carrying over from earlier phases:**
 - Bearer JSON key set is fixed (`token`, `expires_on`, `tenant_id`,
@@ -136,6 +138,8 @@ small).
 - `sync/differ.computeDiff(events, rows, opts)` is pure logic;
   orchestrator binds it as
   `computeDiff(freshEvents, store.iterRows(), { fetchStart, fetchEnd })`.
+- `sync/ics.renderEvent(event)` returns a complete VCALENDAR string;
+  pass `{ now }` in tests to pin DTSTAMP.
 
 ---
 
