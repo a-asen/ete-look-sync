@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
+    "commander": "^14.0.3",
     "etebase": "^0.43.1",
     "playwright": "^1.60.0",
     "smol-toml": "^1.6.1",

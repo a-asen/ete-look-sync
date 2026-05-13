@@ -22,8 +22,9 @@ have to re-derive.
 | 8. Backend interface + factory | ✅ done |
 | 9. CalDAV backend (tsdav) | ✅ done |
 | 10. Etebase backend (etebase npm SDK) | ✅ done |
-| **11. Orchestrator + CLI subcommands** | **← next** |
-| 12+. systemd timer / docs / migration | not started |
+| 11. Orchestrator + CLI subcommands | ✅ done |
+| **12. Systemd timer** | **← next** |
+| 13+. docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -105,57 +106,44 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 11 (orchestrator + CLI) — what to read before starting
+## Phase 12 (systemd timer) — what to read before starting
 
-Reference Python sources:
-- `outlook-calendar-scraper-sync/src/outlook_sync/sync/orchestrator.py`
-- `outlook-calendar-scraper-sync/src/outlook_sync/cli.py`
+Reference Python source:
+`outlook-calendar-scraper-sync/src/outlook_sync/timer.py`.
 
-The orchestrator wires fetch → diff → push and is the only place
-that:
-1. Opens the `Store`, `Session`, and `Backend` (and closes them in a
-   `finally`).
-2. Computes `fetchStart`/`fetchEnd` from `cfg.daysBack` /
-   `cfg.daysForward` and "today UTC."
-3. Iterates `Diff.creates` / `.updates` / `.deletes` and calls the
-   backend, persisting `remote_id` / `remote_etag` via
-   `store.markPushed` and failures via `store.markFailed`.
+Writes two systemd user units to
+`~/.config/systemd/user/`:
 
-CLI subcommands to port: `sync-once`, `fix-errors`, `export-ics`,
-`probe`, `login [caldav|etebase]`, `diagnose`, `setup-timer`. Use
-`commander` (PLAN.md) or `node:util.parseArgs`. `commander` is the
-nicer fit because we have nested subcommands (`login etebase`).
+  - `outlook-sync.service`  — oneshot `ExecStart=<bin> sync-once`
+  - `outlook-sync.timer`    — `OnCalendar=*:0/<interval_minutes>`,
+    `Persistent=true`
 
-The `login etebase` subcommand is the missing piece from phase 10:
-it prompts for server URL + username + password, calls
-`Account.login(...)`, lists collections, asks the user to pick one,
-and persists the saved blob (`account.save()`) to
-`cfg.etebaseBlobFile` plus the chosen collection UID into config.
-File mode 600 on the blob.
+The `<bin>` path needs to resolve to *this* installed CLI; Python
+derives it from `sys.executable`. In Node, derive it from
+`process.execPath` + the location of `dist/cli.js`, or use
+`process.argv[1]` if available. Settle on the simplest path that
+survives `npm link` and a global install (`npm i -g .`).
+
+`remove-timer` mirrors Python: `systemctl --user disable --now`,
+unlink unit files, daemon-reload. Both subcommands should support a
+`--dry-run` mode that prints the unit contents without writing
+anything.
 
 **Carrying over from earlier phases:**
-- Bearer JSON key set is fixed (`token`, `expires_on`, `tenant_id`,
-  `anchor_mailbox`, `scopes`, `cached_at`, `msal_key`); Python's
-  `outlook_sync.auth.session` reads the same keys.
-- `auth/session.callService()` is the only path that should hit
-  `service.svc`.
+- Bearer JSON key set is fixed; auth/session.callService is the only
+  path that should hit service.svc.
 - `fetch/owa.fetchCalendarView(session, cfg, start, end)` is the
-  production entry point; tests use `fetchCalendarViewWith(call, ...)`
-  with an injected `ServiceCaller` so no HTTP is involved.
-- `sync/differ.computeDiff(events, rows, opts)` is pure logic;
-  orchestrator binds it as
-  `computeDiff(freshEvents, store.iterRows(), { fetchStart, fetchEnd })`.
-- `sync/ics.renderEvent(event)` returns a complete VCALENDAR string;
-  pass `{ now }` in tests to pin DTSTAMP.
+  production entry point; tests use `fetchCalendarViewWith(call, ...)`.
+- `sync/differ.computeDiff(events, rows, opts)` is pure logic.
+- `sync/ics.renderEvent(event)` returns a VCALENDAR string.
 - `sync/backend.Backend` is the interface; `openBackend(cfg)` is the
-  factory. Both `./backends/caldav.js` and `./backends/etebase.js`
-  are wired up via lazy `import()`.
-- CJS-only deps (`tsdav`, `etebase`) work fine with named imports in
-  the etebase case, but tsdav needs `import tsdav from "tsdav"; const
-  { createCalendarObject, … } = tsdav;` because tsx-under-Node-22
-  wraps its CJS export as a default at runtime. Try the named-import
-  form first; fall back to the default+destructure form only if you
-  see `does not provide an export named X`.
+  factory. Both backends are lazy-imported.
+- `sync/orchestrator.runSyncOnce(cfg, opts)` and `runFixErrors(cfg,
+  opts)` are the entry points the CLI calls. Both delegate to a
+  `*With(cfg, opts, deps)` variant — tests pass a `SyncDeps` stub.
+- The CLI is `src/cli.ts` (commander-based); the executable bin name
+  is `outlook-sync` (from `package.json#bin`). `dist/cli.js` is what
+  `npm run build` emits and what `npm i -g .` installs.
 
 ---
 
