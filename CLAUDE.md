@@ -21,8 +21,9 @@ have to re-derive.
 | 7. ICS render (Event → iCalendar bytes) | ✅ done |
 | 8. Backend interface + factory | ✅ done |
 | 9. CalDAV backend (tsdav) | ✅ done |
-| **10. Etebase backend (etebase npm SDK)** | **← next** |
-| 11+. CLI / timer / docs / migration | not started |
+| 10. Etebase backend (etebase npm SDK) | ✅ done |
+| **11. Orchestrator + CLI subcommands** | **← next** |
+| 12+. systemd timer / docs / migration | not started |
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -104,29 +105,33 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Phase 10 (Etebase backend) — what to read before starting
+## Phase 11 (orchestrator + CLI) — what to read before starting
 
-The Python tool doesn't have an Etebase backend (its PyPI `etebase`
-package no longer builds — that's the whole reason for this
-rewrite). The reference shape is the `Backend` interface and the
-existing CalDAV implementation; PLAN.md picks the npm `etebase`
-package (^0.43) and notes that `ete-stethic` already uses it.
+Reference Python sources:
+- `outlook-calendar-scraper-sync/src/outlook_sync/sync/orchestrator.py`
+- `outlook-calendar-scraper-sync/src/outlook_sync/cli.py`
 
-Sketch:
-- A `login` subcommand (lands in phase 11 with the CLI) persists a
-  saved Account blob to `cfg.etebaseBlobFile` (mode 600) and the
-  resolved collection UID into config.
-- `EtebaseBackend.open(cfg)` restores the Account from the blob,
-  opens the collection by UID, and binds it to a connected client.
-- Items are stored with the VCALENDAR string as the content and the
-  Exchange itemId as the item-meta UID; the Etebase item UID itself
-  is what we persist as `remote_id`.
-- `remote_etag` maps to the Etebase item's `etag` (it's already an
-  opaque string the SDK round-trips for conditional updates).
+The orchestrator wires fetch → diff → push and is the only place
+that:
+1. Opens the `Store`, `Session`, and `Backend` (and closes them in a
+   `finally`).
+2. Computes `fetchStart`/`fetchEnd` from `cfg.daysBack` /
+   `cfg.daysForward` and "today UTC."
+3. Iterates `Diff.creates` / `.updates` / `.deletes` and calls the
+   backend, persisting `remote_id` / `remote_etag` via
+   `store.markPushed` and failures via `store.markFailed`.
 
-Wire `openBackend(cfg)` to dynamic-import `./backends/etebase.js`
-the same way CalDAV does, to keep the `etebase` dep off the path of
-commands that don't push.
+CLI subcommands to port: `sync-once`, `fix-errors`, `export-ics`,
+`probe`, `login [caldav|etebase]`, `diagnose`, `setup-timer`. Use
+`commander` (PLAN.md) or `node:util.parseArgs`. `commander` is the
+nicer fit because we have nested subcommands (`login etebase`).
+
+The `login etebase` subcommand is the missing piece from phase 10:
+it prompts for server URL + username + password, calls
+`Account.login(...)`, lists collections, asks the user to pick one,
+and persists the saved blob (`account.save()`) to
+`cfg.etebaseBlobFile` plus the chosen collection UID into config.
+File mode 600 on the blob.
 
 **Carrying over from earlier phases:**
 - Bearer JSON key set is fixed (`token`, `expires_on`, `tenant_id`,
@@ -143,12 +148,14 @@ commands that don't push.
 - `sync/ics.renderEvent(event)` returns a complete VCALENDAR string;
   pass `{ now }` in tests to pin DTSTAMP.
 - `sync/backend.Backend` is the interface; `openBackend(cfg)` is the
-  factory. CalDAV is wired up via `./backends/caldav.js`; mirror that
-  pattern for Etebase.
-- `tsdav` is imported as a default + destructure (`import tsdav from
-  "tsdav"; const { createCalendarObject, … } = tsdav;`) because
-  tsx-under-Node-22 wraps its CJS export as a default. The same
-  pattern is likely needed for any other CJS-only dep.
+  factory. Both `./backends/caldav.js` and `./backends/etebase.js`
+  are wired up via lazy `import()`.
+- CJS-only deps (`tsdav`, `etebase`) work fine with named imports in
+  the etebase case, but tsdav needs `import tsdav from "tsdav"; const
+  { createCalendarObject, … } = tsdav;` because tsx-under-Node-22
+  wraps its CJS export as a default at runtime. Try the named-import
+  form first; fall back to the default+destructure form only if you
+  see `does not provide an export named X`.
 
 ---
 

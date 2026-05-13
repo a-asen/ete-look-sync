@@ -71,16 +71,15 @@ export class BackendConfigError extends Error {
  * pointing at which phase wires up the missing piece.
  */
 export async function openBackend(cfg: Config): Promise<Backend> {
+  // Lazy imports keep each backend's protocol-specific dep
+  // (tsdav / etebase) off the path of commands that don't push
+  // (probe / login / diagnose).
   switch (cfg.backend) {
-    case "etebase":
-      throw new BackendConfigError(
-        "Etebase backend is not yet wired up (arrives in phase 10). " +
-          "Set `backend = \"caldav\"` to use CalDAV in the meantime, " +
-          "or wait for the Etebase backend.",
-      );
+    case "etebase": {
+      const { EtebaseBackend } = await import("./backends/etebase.js");
+      return EtebaseBackend.open(cfg);
+    }
     case "caldav": {
-      // Lazy import keeps `tsdav` (the only CalDAV-specific dep) out
-      // of the path of commands that don't push (probe / login).
       const { CalDAVBackend } = await import("./backends/caldav.js");
       return CalDAVBackend.open(cfg);
     }

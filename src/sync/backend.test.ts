@@ -37,12 +37,15 @@ function cfg(backend: Config["backend"]): Config {
   };
 }
 
-test("openBackend(etebase) throws BackendConfigError pending phase 10", async () => {
+test("openBackend(etebase) errors when collection UID is unset", async () => {
+  // EtebaseBackend.open requires `etebaseCollectionUid`; our `cfg()`
+  // helper leaves it empty, so this should fail with a helpful
+  // "login first" message instead of crashing on file IO.
   await assert.rejects(
     () => openBackend(cfg("etebase")),
     (err: unknown) => {
       assert.ok(err instanceof BackendConfigError);
-      assert.match((err as Error).message, /phase 10/);
+      assert.match((err as Error).message, /collection_uid is unset/);
       return true;
     },
   );
