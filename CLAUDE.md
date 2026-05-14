@@ -27,11 +27,15 @@ have to re-derive.
 | 13. Docs (README + config example + service example) | ✅ done |
 | 14. Migration tool (import legacy events.sqlite) | ✅ done |
 
-**All phases complete.** Next session's work is whatever the user
-runs into when actually cutting over from the Python tool — bug
-fixes, polish, real-world quirks the unit tests didn't catch.
-[`README.md`](README.md) is now the canonical user-facing entry
-point; [`PLAN.md`](PLAN.md) is kept as historical reference.
+**All phases complete.** The tool is now fully self-contained under
+the `ete-look-sync` name (binary, state dir, config dir, env vars,
+ICS UID suffix all use it). [`README.md`](README.md) is the canonical
+user-facing entry point; [`PLAN.md`](PLAN.md) is kept as historical
+reference.
+
+`migrate-legacy` is still wired up as a one-off utility for anyone
+who happens to have a Python predecessor's `events.sqlite` to import,
+but it isn't required for normal use.
 
 `git log --oneline` is the source of truth. All tests green
 (`npm test`); typecheck and build clean.
@@ -113,36 +117,7 @@ in `record_json`) needs this same treatment.
 
 ---
 
-## Cutover playbook (when you actually switch over)
-
-Mirroring PLAN.md → "Cutover criteria":
-
-1. Stop the Python timer:
-   `systemctl --user disable --now outlook-sync.timer` (in the
-   Python repo's deployment) so it doesn't fight the new tool.
-2. Copy `~/.local/state/outlook-sync/events.sqlite` somewhere safe
-   (e.g. `events.sqlite.legacy-backup`) before doing anything.
-3. From a checkout of this repo: `npm install && npm run build &&
-   npm install -g .`.
-4. `ete-look-sync login` (Microsoft auth).
-5. `ete-look-sync login-etebase` (or fill in `[caldav]`).
-6. `ete-look-sync migrate-legacy
-   ~/.local/state/outlook-sync/events.sqlite.legacy-backup` — this
-   fails loudly if hash parity broke since the parity tests were
-   pinned. Aborts the migration without touching the new DB if it
-   can't guarantee a no-op first sync.
-7. `ete-look-sync sync-once --dry-run` should now report
-   `nothing to do` (or a small delta if events actually changed
-   upstream between the last Python run and this point).
-8. `ete-look-sync sync-once` to make the first real push, then
-   `ete-look-sync setup-timer` to install the new periodic timer.
-
-If steps 6 / 7 misbehave, the Python tool is still installed and the
-backed-up `events.sqlite.legacy-backup` lets you revert to it
-verbatim — nothing about the migration is destructive to the
-legacy DB.
-
-**Carrying over from earlier phases (the runtime contract):**
+## Runtime contract
 - `auth/session.callService(session, cfg, action, body)` is the
   only path to `service.svc`.
 - `fetch/owa.fetchCalendarView(session, cfg, start, end)` is the
@@ -162,10 +137,11 @@ legacy DB.
   (`ete-look-sync.service` / `ete-look-sync.timer`);
   `runRemoveTimer()` undoes it. The bin path is resolved with
   `which ete-look-sync` and falls back to `process.argv[1]`.
-- The binary name is `ete-look-sync`; state/config paths, env vars
-  (`OUTLOOK_SYNC_*`), and the `@outlook-sync` UID suffix stay as
-  `outlook-sync` so the Python tool and `migrate-legacy` keep
-  working during cutover.
+- The binary is `ete-look-sync`. State lives in
+  `~/.local/state/ete-look-sync/`, config in
+  `~/.config/ete-look-sync/`, env vars are `ETE_LOOK_SYNC_*`, the
+  ICS UID suffix is `@ete-look-sync`, and the ICS PRODID is
+  `-//a-asen//ete-look-sync//EN`.
 
 ---
 

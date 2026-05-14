@@ -177,7 +177,7 @@ test("create retries with alt UID when server returns 500 (tombstone)", async ()
   const backend = new CalDAVBackend(ops, CAL);
   const event = makeEvent({ subject: "Conflicted" });
   const canonicalUid = caldavUid(event);
-  const expectedAltUid = canonicalUid.replace("@outlook-sync", "-r2@outlook-sync");
+  const expectedAltUid = canonicalUid.replace("@ete-look-sync", "-r2@ete-look-sync");
 
   const result = await backend.upsert(event);
   assert.equal(ops.creates.length, 2);

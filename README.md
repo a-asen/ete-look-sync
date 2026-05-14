@@ -10,16 +10,15 @@ Node/TypeScript rewrite of
 backend is the default; CalDAV is also supported.
 
 > The CLI binary is **`ete-look-sync`** (a portmanteau of EteSync +
-> Outlook). State and config still live under `~/.local/state/outlook-sync/`
-> and `~/.config/outlook-sync/` so the Python predecessor (and the
-> `migrate-legacy` import path) can keep reading the same files
-> during cutover.
+> Outlook). State lives in `~/.local/state/ete-look-sync/`, config in
+> `~/.config/ete-look-sync/`, and every environment variable is named
+> `ETE_LOOK_SYNC_*`.
 
 ## How it works
 
 1. A one-time `ete-look-sync login` opens a real Chromium via
    Playwright, drives Microsoft's sign-in flow, and saves the cookies
-   plus the MSAL Bearer token to `~/.local/state/outlook-sync/`.
+   plus the MSAL Bearer token to `~/.local/state/ete-look-sync/`.
 2. Every `ete-look-sync sync-once` replays that session against
    `service.svc`, fetches all events in a rolling
    (`days_back`/`days_forward`) window, and pushes only the changes
@@ -59,9 +58,9 @@ npx playwright install chromium
 Copy the example and fill in the bits you need:
 
 ```bash
-mkdir -p ~/.config/outlook-sync
-cp config-example.toml ~/.config/outlook-sync/config.toml
-chmod 600 ~/.config/outlook-sync/config.toml
+mkdir -p ~/.config/ete-look-sync
+cp config-example.toml ~/.config/ete-look-sync/config.toml
+chmod 600 ~/.config/ete-look-sync/config.toml
 ```
 
 The file is optional — every setting also has an environment
@@ -73,7 +72,7 @@ sane for the common case (Etebase backend, 7d/365d sync window,
 
 You need two logins: Microsoft (for the OWA bearer token) and Etebase
 (for the destination collection). Both produce on-disk state in
-`~/.local/state/outlook-sync/`.
+`~/.local/state/ete-look-sync/`.
 
 ```bash
 # 1. Microsoft sign-in — opens a browser window.
@@ -170,7 +169,7 @@ ete-look-sync remove-timer                     # uninstall
 ## State directory
 
 ```
-~/.local/state/outlook-sync/
+~/.local/state/ete-look-sync/
 ├── bearer.json        # OWA Bearer JWT — written by `login`
 ├── cookies.json       # Browser cookies replayed on every API call
 ├── profile/           # Playwright user-data dir (MFA trusted-device cookie)
@@ -178,7 +177,7 @@ ete-look-sync remove-timer                     # uninstall
 └── etebase.bin        # Saved Etebase Account blob, mode 600
 ```
 
-`config.toml` lives at `~/.config/outlook-sync/config.toml`. Both
+`config.toml` lives at `~/.config/ete-look-sync/config.toml`. Both
 locations honour `XDG_STATE_HOME` / `XDG_CONFIG_HOME` overrides.
 
 ## Backends
@@ -195,7 +194,7 @@ backend = "etebase"   # or "caldav"
 - Pure end-to-end-encrypted: the server only sees ciphertext.
 - Item UID stays stable across updates; ETag advances per revision.
 - `login-etebase` writes the saved Account blob to
-  `~/.local/state/outlook-sync/etebase.bin` at mode 600.
+  `~/.local/state/ete-look-sync/etebase.bin` at mode 600.
 
 ### CalDAV
 
@@ -203,7 +202,7 @@ backend = "etebase"   # or "caldav"
   etesync-dav) or a server/principal URL + a `[caldav].calendar`
   display name.
 - Tombstones (HTTP 500 on a re-used UID) trigger an automatic one-shot
-  retry with a `-r2@outlook-sync` UID suffix; the new href is then
+  retry with a `-r2@ete-look-sync` UID suffix; the new href is then
   persisted as `remote_id` so subsequent updates skip the retry.
 
 ## Architecture
@@ -229,17 +228,15 @@ suite. The orchestrator and backends both use dep-injection seams
 (`SyncDeps`, `DavOps`, `EtebaseOps`) so the tests never touch real
 HTTP.
 
-## Cross-language compatibility
+## Determinism
 
-`contentHash()` and `caldavUid()` (in `src/models.ts`) produce
-byte-for-byte identical output to their Python counterparts. This
-matters for the migration tool (next phase): the existing
-`events.sqlite` from the Python tool is imported row-for-row, and on
-the next sync the TS hash must match the stored Python hash —
-otherwise every event would re-push.
-
-Parity is verified by golden values in `src/models.test.ts` and
-`src/fetch/parse.test.ts` (full OWA-dict round-trip).
+`contentHash()` and `caldavUid()` (in `src/models.ts`) produce the
+same output for the same `Event` on every run — the differ uses
+`contentHash` to decide whether anything changed, and the backends
+key items by `caldavUid`, so any silent drift in either would
+trigger spurious re-pushes on the next sync. Both shapes are pinned
+by golden values in `src/models.test.ts` and `src/fetch/parse.test.ts`
+(full OWA-dict → Event round-trip).
 
 ## Development
 

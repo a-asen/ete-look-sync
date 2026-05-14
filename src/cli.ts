@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 // ete-look-sync command-line entry point.
 //
-// Binary name is the portmanteau "ete-look-sync"; state still lives
-// under ~/.local/state/outlook-sync/ (and env vars stay OUTLOOK_SYNC_*)
-// so the Python predecessor and migrate-legacy can keep reading the
-// same files during cutover.
+// State lives under ~/.local/state/ete-look-sync/, config under
+// ~/.config/ete-look-sync/, env vars are ETE_LOOK_SYNC_*.
 //
 // Subcommands:
 //   login            Playwright-driven browser login that captures cookies + bearer

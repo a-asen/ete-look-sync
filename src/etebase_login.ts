@@ -5,7 +5,7 @@
 //
 //   - the saved Account blob to cfg.etebaseBlobFile (mode 600)
 //   - the chosen collection UID to stdout, with a single-line hint
-//     about adding it to ~/.config/outlook-sync/config.toml
+//     about adding it to ~/.config/ete-look-sync/config.toml
 //
 // The blob is the only place encryption keys are persisted; chmod 600
 // keeps it readable by the user only. Persisting the collection UID
@@ -73,7 +73,7 @@ export async function runEtebaseLogin(cfg: Config): Promise<number> {
     process.stdout.write(`\n[login-etebase] saved account blob to ${cfg.etebaseBlobFile} (mode 600)\n`);
     process.stdout.write(`[login-etebase] collection UID: ${collectionUid}\n\n`);
     process.stdout.write(
-      "Add this to ~/.config/outlook-sync/config.toml:\n\n" +
+      "Add this to ~/.config/ete-look-sync/config.toml:\n\n" +
         "[etebase]\n" +
         `server_url     = "${serverUrl}"\n` +
         `username       = "${username}"\n` +

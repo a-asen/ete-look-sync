@@ -13,7 +13,7 @@ import {
 import { loadConfig, type Config } from "../config.js";
 
 function withIsolatedConfig(fn: (cfg: Config) => void): void {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "outlook-sync-auth-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ete-look-sync-auth-"));
   const saved: Record<string, string | undefined> = {};
   const overrides: Record<string, string | undefined> = {
     HOME: tmp,
@@ -21,7 +21,7 @@ function withIsolatedConfig(fn: (cfg: Config) => void): void {
     XDG_CONFIG_HOME: path.join(tmp, "config"),
     ...Object.fromEntries(
       Object.keys(process.env)
-        .filter((k) => k.startsWith("OUTLOOK_SYNC_"))
+        .filter((k) => k.startsWith("ETE_LOOK_SYNC_"))
         .map((k) => [k, undefined]),
     ),
   };

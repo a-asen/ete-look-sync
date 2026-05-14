@@ -1,17 +1,14 @@
 # ete-look-sync configuration example
 #
-# (The config directory is still ~/.config/outlook-sync/ — kept
-# as-is so the Python predecessor and migrate-legacy share state.)
-#
-# Copy this file to ~/.config/outlook-sync/config.toml and fill in
+# Copy this file to ~/.config/ete-look-sync/config.toml and fill in
 # your values:
 #
-#   mkdir -p ~/.config/outlook-sync
-#   cp config-example.toml ~/.config/outlook-sync/config.toml
-#   chmod 600 ~/.config/outlook-sync/config.toml
+#   mkdir -p ~/.config/ete-look-sync
+#   cp config-example.toml ~/.config/ete-look-sync/config.toml
+#   chmod 600 ~/.config/ete-look-sync/config.toml
 #
 # Every setting also has an environment variable (named
-# `OUTLOOK_SYNC_<SECTION>_<KEY>`, all caps). Env vars always win
+# `ETE_LOOK_SYNC_<SECTION>_<KEY>`, all caps). Env vars always win
 # over this file, which is useful for one-off overrides without
 # editing it.
 
@@ -23,7 +20,7 @@
 # Base URL of the Outlook Web App tenant. The default matches
 # what `login` ends up landing on; only change this if your tenant
 # uses a custom Outlook host.
-# Env: OUTLOOK_SYNC_OWA_URL
+# Env: ETE_LOOK_SYNC_OWA_URL
 base_url = "https://outlook.cloud.microsoft"
 
 # ---------------------------------------------------------------------
@@ -32,11 +29,11 @@ base_url = "https://outlook.cloud.microsoft"
 [sync]
 
 # Which backend to push to: "etebase" or "caldav".
-# Env: OUTLOOK_SYNC_BACKEND
+# Env: ETE_LOOK_SYNC_BACKEND
 backend = "etebase"
 
 # Rolling window used by every regular `sync-once` run.
-# Env: OUTLOOK_SYNC_DAYS_BACK / OUTLOOK_SYNC_DAYS_FORWARD
+# Env: ETE_LOOK_SYNC_DAYS_BACK / ETE_LOOK_SYNC_DAYS_FORWARD
 days_back    = 7    # past days to re-check on each run
 days_forward = 365  # future days to fetch
 
@@ -45,12 +42,12 @@ days_forward = 365  # future days to fetch
 # them. Protects your historical record from back-dated
 # corrections and accidental deletes. Use --no-freeze-past on a
 # one-off `sync-once` if you want to backfill history.
-# Env: OUTLOOK_SYNC_FREEZE_PAST_DAYS
+# Env: ETE_LOOK_SYNC_FREEZE_PAST_DAYS
 freeze_past_days = 2
 
 # How often the systemd timer fires, in minutes. Read by
 # `setup-timer` when it generates the unit files.
-# Env: OUTLOOK_SYNC_INTERVAL_MINUTES
+# Env: ETE_LOOK_SYNC_INTERVAL_MINUTES
 interval_minutes = 30
 
 # ---------------------------------------------------------------------
@@ -60,18 +57,18 @@ interval_minutes = 30
 
 # Etebase server URL. The public hosted instance is api.etebase.com;
 # point this at your own host if you're self-hosting EteSync.
-# Env: OUTLOOK_SYNC_ETEBASE_SERVER_URL
+# Env: ETE_LOOK_SYNC_ETEBASE_SERVER_URL
 server_url = "https://api.etebase.com"
 
 # Etebase username — used only for diagnostics and as the prompt
 # default in `login-etebase`. Not required for sync.
-# Env: OUTLOOK_SYNC_ETEBASE_USERNAME
+# Env: ETE_LOOK_SYNC_ETEBASE_USERNAME
 username = ""
 
 # Collection UID to push events into. Run `ete-look-sync
 # login-etebase` once; it lists your collections and prints the
 # UID for you to paste here.
-# Env: OUTLOOK_SYNC_ETEBASE_COLLECTION_UID
+# Env: ETE_LOOK_SYNC_ETEBASE_COLLECTION_UID
 collection_uid = ""
 
 # ---------------------------------------------------------------------
@@ -84,17 +81,17 @@ collection_uid = ""
 # one URL per calendar). Alternatively point this at a
 # principal/server URL and set `calendar` below to discover the
 # right calendar by display name.
-# Env: OUTLOOK_SYNC_CALDAV_URL
+# Env: ETE_LOOK_SYNC_CALDAV_URL
 url = ""
 
 # HTTP Basic-Auth credentials. etesync-dav running locally
 # usually requires the EteSync account username and password.
-# Env: OUTLOOK_SYNC_CALDAV_USERNAME / OUTLOOK_SYNC_CALDAV_PASSWORD
+# Env: ETE_LOOK_SYNC_CALDAV_USERNAME / ETE_LOOK_SYNC_CALDAV_PASSWORD
 username = ""
 password = ""
 
 # Optional: calendar display name for name-based discovery. Leave
 # empty when `url` already points directly at a calendar (the
 # common case).
-# Env: OUTLOOK_SYNC_CALDAV_CALENDAR
+# Env: ETE_LOOK_SYNC_CALDAV_CALENDAR
 # calendar = ""

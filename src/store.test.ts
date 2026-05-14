@@ -8,7 +8,7 @@ import { Store } from "./store.js";
 import { contentHash, type Event } from "./models.js";
 
 function tempDb(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "outlook-sync-store-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ete-look-sync-store-"));
   return path.join(dir, "events.sqlite");
 }
 

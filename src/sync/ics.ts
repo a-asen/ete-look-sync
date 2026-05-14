@@ -15,7 +15,7 @@
 
 import { caldavUid, type Event } from "../models.js";
 
-export const PRODID = "-//a-asen//outlook-sync//EN";
+export const PRODID = "-//a-asen//ete-look-sync//EN";
 
 const CRLF = "\r\n";
 // RFC 5545 §3.1: lines SHOULD NOT exceed 75 octets including the CRLF.

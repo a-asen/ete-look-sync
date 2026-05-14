@@ -3,7 +3,7 @@
 //
 // Settings are resolved in priority order (highest first):
 //   1. Environment variables (always override everything)
-//   2. ~/.config/outlook-sync/config.toml (or $OUTLOOK_SYNC_CONFIG)
+//   2. ~/.config/ete-look-sync/config.toml (or $ETE_LOOK_SYNC_CONFIG)
 //   3. Built-in defaults
 //
 // The TOML file is optional — if absent, env vars and defaults still
@@ -65,8 +65,8 @@ export function loadConfig(): Config {
   const caldavToml = sectionOf(toml, "caldav");
 
   const stateDir =
-    process.env["OUTLOOK_SYNC_STATE_DIR"] ??
-    path.join(xdgStateHome(), "outlook-sync");
+    process.env["ETE_LOOK_SYNC_STATE_DIR"] ??
+    path.join(xdgStateHome(), "ete-look-sync");
   fs.mkdirSync(stateDir, { recursive: true });
 
   return {
@@ -78,42 +78,42 @@ export function loadConfig(): Config {
     etebaseBlobFile: path.join(stateDir, "etebase.bin"),
 
     owaBaseUrl: stringSetting(
-      "OUTLOOK_SYNC_OWA_URL", owaToml, "base_url",
+      "ETE_LOOK_SYNC_OWA_URL", owaToml, "base_url",
       "https://outlook.cloud.microsoft",
     ),
 
     backend: parseBackend(
-      stringSetting("OUTLOOK_SYNC_BACKEND", syncToml, "backend", "etebase"),
+      stringSetting("ETE_LOOK_SYNC_BACKEND", syncToml, "backend", "etebase"),
     ),
 
     etebaseServerUrl: stringSetting(
-      "OUTLOOK_SYNC_ETEBASE_SERVER_URL", etebaseToml, "server_url",
+      "ETE_LOOK_SYNC_ETEBASE_SERVER_URL", etebaseToml, "server_url",
       "https://api.etebase.com",
     ),
     etebaseUsername: stringSetting(
-      "OUTLOOK_SYNC_ETEBASE_USERNAME", etebaseToml, "username", "",
+      "ETE_LOOK_SYNC_ETEBASE_USERNAME", etebaseToml, "username", "",
     ),
     etebaseCollectionUid: stringSetting(
-      "OUTLOOK_SYNC_ETEBASE_COLLECTION_UID", etebaseToml, "collection_uid", "",
+      "ETE_LOOK_SYNC_ETEBASE_COLLECTION_UID", etebaseToml, "collection_uid", "",
     ),
 
     caldavUrl: stringSetting(
-      "OUTLOOK_SYNC_CALDAV_URL", caldavToml, "url", "",
+      "ETE_LOOK_SYNC_CALDAV_URL", caldavToml, "url", "",
     ),
     caldavUsername: stringSetting(
-      "OUTLOOK_SYNC_CALDAV_USERNAME", caldavToml, "username", "",
+      "ETE_LOOK_SYNC_CALDAV_USERNAME", caldavToml, "username", "",
     ),
     caldavPassword: stringSetting(
-      "OUTLOOK_SYNC_CALDAV_PASSWORD", caldavToml, "password", "",
+      "ETE_LOOK_SYNC_CALDAV_PASSWORD", caldavToml, "password", "",
     ),
     caldavCalendarName: stringSetting(
-      "OUTLOOK_SYNC_CALDAV_CALENDAR", caldavToml, "calendar", "",
+      "ETE_LOOK_SYNC_CALDAV_CALENDAR", caldavToml, "calendar", "",
     ),
 
-    daysBack: intSetting("OUTLOOK_SYNC_DAYS_BACK", syncToml, "days_back", 7),
-    daysForward: intSetting("OUTLOOK_SYNC_DAYS_FORWARD", syncToml, "days_forward", 365),
-    freezePastDays: intSetting("OUTLOOK_SYNC_FREEZE_PAST_DAYS", syncToml, "freeze_past_days", 2),
-    intervalMinutes: intSetting("OUTLOOK_SYNC_INTERVAL_MINUTES", syncToml, "interval_minutes", 30),
+    daysBack: intSetting("ETE_LOOK_SYNC_DAYS_BACK", syncToml, "days_back", 7),
+    daysForward: intSetting("ETE_LOOK_SYNC_DAYS_FORWARD", syncToml, "days_forward", 365),
+    freezePastDays: intSetting("ETE_LOOK_SYNC_FREEZE_PAST_DAYS", syncToml, "freeze_past_days", 2),
+    intervalMinutes: intSetting("ETE_LOOK_SYNC_INTERVAL_MINUTES", syncToml, "interval_minutes", 30),
   };
 }
 
@@ -129,8 +129,8 @@ function xdgConfigHome(): string {
 
 function loadToml(): Record<string, unknown> {
   const configPath =
-    process.env["OUTLOOK_SYNC_CONFIG"] ??
-    path.join(xdgConfigHome(), "outlook-sync", "config.toml");
+    process.env["ETE_LOOK_SYNC_CONFIG"] ??
+    path.join(xdgConfigHome(), "ete-look-sync", "config.toml");
   if (!fs.existsSync(configPath)) return {};
   const parsed = parseToml(fs.readFileSync(configPath, "utf8"));
   return isPlainObject(parsed) ? parsed : {};

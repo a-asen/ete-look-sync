@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { loadConfig, serviceSvcUrl } from "./config.js";
 
 /**
- * Run `fn` with a freshly-isolated `$HOME`, `$XDG_*`, and `$OUTLOOK_SYNC_*`
+ * Run `fn` with a freshly-isolated `$HOME`, `$XDG_*`, and `$ETE_LOOK_SYNC_*`
  * environment so loadConfig() reads only what we put there. Restores the
  * previous environment on exit, even on failure.
  */
@@ -15,15 +15,15 @@ function withIsolatedEnv(
   overrides: Record<string, string | undefined>,
   fn: () => void,
 ): void {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "outlook-sync-test-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ete-look-sync-test-"));
   const sandbox: Record<string, string | undefined> = {
     HOME: tmp,
     XDG_STATE_HOME: path.join(tmp, "state"),
     XDG_CONFIG_HOME: path.join(tmp, "config"),
-    // Clear every OUTLOOK_SYNC_* var so the host env can't leak into a test.
+    // Clear every ETE_LOOK_SYNC_* var so the host env can't leak into a test.
     ...Object.fromEntries(
       Object.keys(process.env)
-        .filter((k) => k.startsWith("OUTLOOK_SYNC_"))
+        .filter((k) => k.startsWith("ETE_LOOK_SYNC_"))
         .map((k) => [k, undefined]),
     ),
     ...overrides,
@@ -63,9 +63,9 @@ test("loadConfig: defaults when nothing is set", () => {
 test("loadConfig: env vars override defaults", () => {
   withIsolatedEnv(
     {
-      OUTLOOK_SYNC_BACKEND: "caldav",
-      OUTLOOK_SYNC_DAYS_BACK: "42",
-      OUTLOOK_SYNC_CALDAV_URL: "http://localhost:37358/x/y/",
+      ETE_LOOK_SYNC_BACKEND: "caldav",
+      ETE_LOOK_SYNC_DAYS_BACK: "42",
+      ETE_LOOK_SYNC_CALDAV_URL: "http://localhost:37358/x/y/",
     },
     () => {
       const cfg = loadConfig();
@@ -79,7 +79,7 @@ test("loadConfig: env vars override defaults", () => {
 test("loadConfig: TOML values are read when env is unset", () => {
   withIsolatedEnv({}, () => {
     const configHome = process.env["XDG_CONFIG_HOME"]!;
-    const dir = path.join(configHome, "outlook-sync");
+    const dir = path.join(configHome, "ete-look-sync");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "config.toml"),
@@ -103,9 +103,9 @@ test("loadConfig: TOML values are read when env is unset", () => {
 });
 
 test("loadConfig: env wins over TOML", () => {
-  withIsolatedEnv({ OUTLOOK_SYNC_BACKEND: "etebase" }, () => {
+  withIsolatedEnv({ ETE_LOOK_SYNC_BACKEND: "etebase" }, () => {
     const configHome = process.env["XDG_CONFIG_HOME"]!;
-    const dir = path.join(configHome, "outlook-sync");
+    const dir = path.join(configHome, "ete-look-sync");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "config.toml"),
@@ -118,7 +118,7 @@ test("loadConfig: env wins over TOML", () => {
 test("loadConfig: paths land under the configured stateDir", () => {
   withIsolatedEnv({}, () => {
     const cfg = loadConfig();
-    assert.ok(cfg.stateDir.endsWith(path.join("state", "outlook-sync")));
+    assert.ok(cfg.stateDir.endsWith(path.join("state", "ete-look-sync")));
     assert.equal(cfg.dbFile, path.join(cfg.stateDir, "events.sqlite"));
     assert.equal(cfg.etebaseBlobFile, path.join(cfg.stateDir, "etebase.bin"));
     assert.equal(cfg.bearerFile, path.join(cfg.stateDir, "bearer.json"));
@@ -127,19 +127,19 @@ test("loadConfig: paths land under the configured stateDir", () => {
 });
 
 test("loadConfig: rejects an unknown backend value", () => {
-  withIsolatedEnv({ OUTLOOK_SYNC_BACKEND: "bogus" }, () => {
+  withIsolatedEnv({ ETE_LOOK_SYNC_BACKEND: "bogus" }, () => {
     assert.throws(() => loadConfig(), /Unknown sync backend/);
   });
 });
 
 test("loadConfig: integer env values must parse", () => {
-  withIsolatedEnv({ OUTLOOK_SYNC_DAYS_BACK: "not-a-number" }, () => {
+  withIsolatedEnv({ ETE_LOOK_SYNC_DAYS_BACK: "not-a-number" }, () => {
     assert.throws(() => loadConfig(), /must be an integer/);
   });
 });
 
 test("serviceSvcUrl strips trailing slashes from owaBaseUrl", () => {
-  withIsolatedEnv({ OUTLOOK_SYNC_OWA_URL: "https://example.com///" }, () => {
+  withIsolatedEnv({ ETE_LOOK_SYNC_OWA_URL: "https://example.com///" }, () => {
     const cfg = loadConfig();
     assert.equal(serviceSvcUrl(cfg), "https://example.com/owa/service.svc");
   });

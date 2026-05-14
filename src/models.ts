@@ -43,12 +43,9 @@ export interface Event {
  * (kitchen-sink dict whose key order can drift). Including them would
  * make every harmless server-side touch register as a spurious update.
  *
- * Byte-for-byte compatible with the Python implementation in the
- * predecessor repo: same key set, same `json.dumps(sort_keys=True)`
- * output shape (including the `, ` / `: ` separators), same UTF-8
- * encoding. This matters for the migration tool in phase 14 — events
- * imported from `events.sqlite` must hash to the same value here so
- * unchanged rows don't get re-pushed.
+ * The serialisation shape (sorted keys, `, ` / `: ` separators, UTF-8
+ * input) is pinned by `models.test.ts` so future changes to the
+ * payload can't silently break the differ.
  */
 export function contentHash(event: Event): string {
   const payload = {
@@ -72,7 +69,7 @@ export function contentHash(event: Event): string {
  * Deterministic ICS UID derived from the Exchange item id.
  *
  * Stable across runs (so re-syncs don't duplicate) and short enough
- * that CalDAV servers don't truncate it. The `@outlook-sync` suffix
+ * that CalDAV servers don't truncate it. The `@ete-look-sync` suffix
  * follows RFC 5545 by giving the UID a clear domain-style scope; the
  * CalDAV backend's tombstone-retry logic relies on it being present.
  */
@@ -81,7 +78,7 @@ export function caldavUid(event: Event): string {
     .update(event.itemId, "utf8")
     .digest("hex")
     .slice(0, 32);
-  return `ocs-${h}@outlook-sync`;
+  return `ocs-${h}@ete-look-sync`;
 }
 
 // Mirrors Python's `json.dumps(payload, sort_keys=True, ensure_ascii=False)`:

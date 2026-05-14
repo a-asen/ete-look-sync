@@ -21,22 +21,21 @@ const sample: Event = {
   webLink: "https://outlook.cloud.microsoft/...",
 };
 
-// These golden values were computed by the Python implementation in the
-// predecessor repo against the same `sample` event (modulo field naming).
-// If either of these assertions ever fails, byte-for-byte cross-language
-// compatibility has broken — the migration tool in phase 14 will then
-// see every imported event as "changed" and re-push the entire history.
-const PYTHON_CONTENT_HASH =
+// Pinned golden values: if either changes the serialisation shape of
+// contentHash() or caldavUid() drifted. The differ uses contentHash
+// to decide what to push, and the backends key items by caldavUid —
+// breaking either would make every event re-push on the next sync.
+const EXPECTED_CONTENT_HASH =
   "d0fb97b8eee7e1d3488e93ea6944e85c05cc0855a869419465fb93d23f91a524";
-const PYTHON_CALDAV_UID =
-  "ocs-e2d4768b3472b90ca749600da34e6221@outlook-sync";
+const EXPECTED_CALDAV_UID =
+  "ocs-e2d4768b3472b90ca749600da34e6221@ete-look-sync";
 
-test("contentHash matches the Python implementation byte-for-byte", () => {
-  assert.equal(contentHash(sample), PYTHON_CONTENT_HASH);
+test("contentHash matches the pinned shape", () => {
+  assert.equal(contentHash(sample), EXPECTED_CONTENT_HASH);
 });
 
-test("caldavUid matches the Python implementation byte-for-byte", () => {
-  assert.equal(caldavUid(sample), PYTHON_CALDAV_UID);
+test("caldavUid matches the pinned shape", () => {
+  assert.equal(caldavUid(sample), EXPECTED_CALDAV_UID);
 });
 
 test("contentHash is deterministic", () => {

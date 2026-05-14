@@ -135,11 +135,11 @@ test("collectAttendees ignores entries with no email", () => {
   assert.deepEqual(attendees, ["user@x.com"]);
 });
 
-// Pinned by running the same raw dict through Python's parse_event
-// (outlook_sync.fetch.parse). If this drifts, parsed events imported
-// from the legacy SQLite would all look "changed" and trigger a
-// full re-push during cutover — see CLAUDE.md → cross-language compat.
-const PYTHON_SAMPLE_RAW = {
+// Pinned end-to-end snapshot of the OWA-dict → Event pipeline. Any
+// drift in HTML stripping, attendee normalisation, contentHash, or
+// caldavUid would silently re-push every event on the next sync, so
+// these values gate every release.
+const SAMPLE_RAW = {
   ItemId: { Id: "AAA", ChangeKey: "BBB" },
   Subject: "Standup",
   Start: "2026-05-13T08:00:00Z",
@@ -162,18 +162,18 @@ const PYTHON_SAMPLE_RAW = {
   WebClientReadFormQueryString: "https://outlook/x",
 };
 
-const PYTHON_PARSED_BODY = "hello world\nline two & more text";
-const PYTHON_PARSED_ATTENDEES = ["alice@example.com", "bob@example.com", "carol@example.com"];
-const PYTHON_PARSED_HASH =
+const EXPECTED_BODY = "hello world\nline two & more text";
+const EXPECTED_ATTENDEES = ["alice@example.com", "bob@example.com", "carol@example.com"];
+const EXPECTED_HASH =
   "6fecc0e73e715c704f8f04ea646ba15b2ca5d5fd40d8faf075b5c5d4b28e1670";
-const PYTHON_PARSED_UID = "ocs-cb1ad2119d8fafb69566510ee712661f@outlook-sync";
+const EXPECTED_UID = "ocs-cb1ad2119d8fafb69566510ee712661f@ete-look-sync";
 
-test("parseEvent output matches Python parser byte-for-byte", () => {
-  const event = parseEvent(PYTHON_SAMPLE_RAW);
-  assert.equal(event.bodyText, PYTHON_PARSED_BODY);
-  assert.deepEqual(event.attendees, PYTHON_PARSED_ATTENDEES);
-  assert.equal(contentHash(event), PYTHON_PARSED_HASH);
-  assert.equal(caldavUid(event), PYTHON_PARSED_UID);
+test("parseEvent end-to-end shape stays pinned", () => {
+  const event = parseEvent(SAMPLE_RAW);
+  assert.equal(event.bodyText, EXPECTED_BODY);
+  assert.deepEqual(event.attendees, EXPECTED_ATTENDEES);
+  assert.equal(contentHash(event), EXPECTED_HASH);
+  assert.equal(caldavUid(event), EXPECTED_UID);
 });
 
 test("collectAttendees returns sorted order", () => {

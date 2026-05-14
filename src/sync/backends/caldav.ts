@@ -159,7 +159,7 @@ export class CalDAVBackend implements Backend {
       // this issue.
       if (!isFiveHundred(firstErr)) throw firstErr;
 
-      const altUid = canonicalUid.replace("@outlook-sync", "-r2@outlook-sync");
+      const altUid = canonicalUid.replace("@ete-look-sync", "-r2@ete-look-sync");
       const altIcs = ics.replace(`UID:${canonicalUid}`, `UID:${altUid}`);
       const altFilename = filenameFromUid(altUid);
       log.warn(`[caldav] 500 on ${event.subject || "(no subject)"} — tombstone conflict; retrying with alt UID`);
@@ -283,9 +283,9 @@ function basicAuthHeaders(creds: { username?: string; password?: string }): Reco
 // ---------- internals ----------
 
 function filenameFromUid(uid: string): string {
-  // Strip the `@outlook-sync` suffix and any unsafe path chars before
-  // appending `.ics`. The UID itself is hex-ish + ASCII so this only
-  // ever rewrites the suffix in practice.
+  // Strip the `@ete-look-sync` suffix and any unsafe path chars
+  // before appending `.ics`. The UID itself is hex-ish + ASCII so
+  // this only ever rewrites the suffix in practice.
   const stem = uid.replace(/[^A-Za-z0-9._-]/g, "_");
   return `${stem}.ics`;
 }
