@@ -70,7 +70,7 @@ export class EtebaseBackend implements Backend {
   static async open(cfg: Config): Promise<EtebaseBackend> {
     if (!cfg.etebaseCollectionUid) {
       throw new BackendConfigError(
-        "etebase.collection_uid is unset. Run `outlook-sync login etebase` " +
+        "etebase.collection_uid is unset. Run `ete-look-sync login-etebase` " +
           "to pick a collection first.",
       );
     }
@@ -80,7 +80,7 @@ export class EtebaseBackend implements Backend {
     } catch (err) {
       throw new BackendConfigError(
         `No saved Etebase account at ${cfg.etebaseBlobFile} ` +
-          `(${describeError(err)}). Run \`outlook-sync login etebase\` first.`,
+          `(${describeError(err)}). Run \`ete-look-sync login-etebase\` first.`,
       );
     }
 

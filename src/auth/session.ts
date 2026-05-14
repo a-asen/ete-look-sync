@@ -60,7 +60,7 @@ export interface Session {
 export function loadSession(cfg: Config): Session {
   if (!fs.existsSync(cfg.cookiesFile) || !fs.existsSync(cfg.bearerFile)) {
     throw new SessionNotCaptured(
-      `No saved session at ${cfg.stateDir}. Run \`outlook-sync login\` first.`,
+      `No saved session at ${cfg.stateDir}. Run \`ete-look-sync login\` first.`,
     );
   }
 
@@ -133,7 +133,7 @@ function guardExpiry(bearer: StoredBearer): void {
   const exp = Number(bearer.expires_on ?? 0);
   if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000) + EXPIRY_SKEW_SEC) {
     throw new SessionExpired(
-      `Saved bearer token is expired (exp=${exp}). Run \`outlook-sync login\` to refresh.`,
+      `Saved bearer token is expired (exp=${exp}). Run \`ete-look-sync login\` to refresh.`,
     );
   }
 }

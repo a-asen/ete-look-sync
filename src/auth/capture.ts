@@ -180,7 +180,7 @@ export async function maybeSilentRefresh(cfg: Config): Promise<void> {
     if (e instanceof SilentRefreshFailed) {
       log.warn(
         "[sync] silent refresh failed — MFA interaction required. " +
-          "Run 'outlook-sync login' at your next opportunity. " +
+          "Run 'ete-look-sync login' at your next opportunity. " +
           "Proceeding with the existing token for now.",
       );
       return;
@@ -241,7 +241,7 @@ async function waitForBearer(
     `[auth] timed out after ${Math.floor(opts.timeoutMs / 1000)}s waiting for a fresh ` +
       "Outlook-audience bearer token. Sign in and let the calendar fully render — " +
       "clicking around the week view triggers MSAL to refresh. If it keeps failing, " +
-      "run `outlook-sync diagnose` and share the summary.",
+      "run `ete-look-sync diagnose` and share the summary.",
   );
 }
 

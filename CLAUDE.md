@@ -124,18 +124,18 @@ Mirroring PLAN.md → "Cutover criteria":
    (e.g. `events.sqlite.legacy-backup`) before doing anything.
 3. From a checkout of this repo: `npm install && npm run build &&
    npm install -g .`.
-4. `outlook-sync login` (Microsoft auth).
-5. `outlook-sync login-etebase` (or fill in `[caldav]`).
-6. `outlook-sync migrate-legacy
+4. `ete-look-sync login` (Microsoft auth).
+5. `ete-look-sync login-etebase` (or fill in `[caldav]`).
+6. `ete-look-sync migrate-legacy
    ~/.local/state/outlook-sync/events.sqlite.legacy-backup` — this
    fails loudly if hash parity broke since the parity tests were
    pinned. Aborts the migration without touching the new DB if it
    can't guarantee a no-op first sync.
-7. `outlook-sync sync-once --dry-run` should now report
+7. `ete-look-sync sync-once --dry-run` should now report
    `nothing to do` (or a small delta if events actually changed
    upstream between the last Python run and this point).
-8. `outlook-sync sync-once` to make the first real push, then
-   `outlook-sync setup-timer` to install the new periodic timer.
+8. `ete-look-sync sync-once` to make the first real push, then
+   `ete-look-sync setup-timer` to install the new periodic timer.
 
 If steps 6 / 7 misbehave, the Python tool is still installed and the
 backed-up `events.sqlite.legacy-backup` lets you revert to it
@@ -158,9 +158,14 @@ legacy DB.
 - CLI is `src/cli.ts` (commander). Subcommands:
   `login`, `login-etebase`, `probe`, `sync-once`, `fix-errors`,
   `export-ics`, `setup-timer`, `remove-timer`, `diagnose` (stub).
-- `timer.runSetupTimer(cfg, { dryRun? })` writes the systemd units;
+- `timer.runSetupTimer(cfg, { dryRun? })` writes the systemd units
+  (`ete-look-sync.service` / `ete-look-sync.timer`);
   `runRemoveTimer()` undoes it. The bin path is resolved with
-  `which outlook-sync` and falls back to `process.argv[1]`.
+  `which ete-look-sync` and falls back to `process.argv[1]`.
+- The binary name is `ete-look-sync`; state/config paths, env vars
+  (`OUTLOOK_SYNC_*`), and the `@outlook-sync` UID suffix stay as
+  `outlook-sync` so the Python tool and `migrate-legacy` keep
+  working during cutover.
 
 ---
 

@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "bin": {
-    "outlook-sync": "dist/cli.js"
+    "ete-look-sync": "dist/cli.js"
   },
   "files": [
     "dist"

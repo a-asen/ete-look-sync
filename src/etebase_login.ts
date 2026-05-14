@@ -1,4 +1,4 @@
-// Interactive `outlook-sync login-etebase` flow.
+// Interactive `ete-look-sync login-etebase` flow.
 //
 // Prompts for server URL / username / password, calls Account.login,
 // lists collections, asks the user to pick one, then writes:

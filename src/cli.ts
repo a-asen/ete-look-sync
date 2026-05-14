@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-// outlook-sync command-line entry point.
+// ete-look-sync command-line entry point.
+//
+// Binary name is the portmanteau "ete-look-sync"; state still lives
+// under ~/.local/state/outlook-sync/ (and env vars stay OUTLOOK_SYNC_*)
+// so the Python predecessor and migrate-legacy can keep reading the
+// same files during cutover.
 //
 // Subcommands:
 //   login            Playwright-driven browser login that captures cookies + bearer
@@ -31,7 +36,7 @@ import { runRemoveTimer, runSetupTimer } from "./timer.js";
 
 async function main(argv: readonly string[]): Promise<number> {
   const program = new Command()
-    .name("outlook-sync")
+    .name("ete-look-sync")
     .description("Headless mirror of an Outlook calendar to a personal EteSync calendar.")
     .option("--debug", "Enable debug logging (API requests, pagination, batch details).")
     .hook("preAction", (thisCommand) => {

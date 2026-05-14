@@ -49,7 +49,7 @@ function makeDeps(opts: {
   const calls: SystemctlCall[] = [];
   // null is explicit "no bin found"; undefined falls back to the default.
   const binPath =
-    "binPath" in opts ? opts.binPath ?? null : "/usr/local/bin/outlook-sync";
+    "binPath" in opts ? opts.binPath ?? null : "/usr/local/bin/ete-look-sync";
   return {
     calls,
     deps: {
@@ -66,8 +66,8 @@ function makeDeps(opts: {
 // ---------- unit rendering ----------
 
 test("renderServiceUnit pins the resolved bin path", () => {
-  const unit = renderServiceUnit("/usr/local/bin/outlook-sync");
-  assert.match(unit, /ExecStart=\/usr\/local\/bin\/outlook-sync sync-once/);
+  const unit = renderServiceUnit("/usr/local/bin/ete-look-sync");
+  assert.match(unit, /ExecStart=\/usr\/local\/bin\/ete-look-sync sync-once/);
   assert.match(unit, /Type=oneshot/);
   assert.match(unit, /WantedBy=default\.target/);
   assert.match(unit, /After=network-online\.target/);
@@ -107,14 +107,14 @@ test("runSetupTimer writes both unit files and runs daemon-reload + enable", asy
   const code = await runSetupTimer(makeCfg(15), {}, deps);
   assert.equal(code, 0);
 
-  const service = fs.readFileSync(path.join(systemdDir, "outlook-sync.service"), "utf8");
-  const timer = fs.readFileSync(path.join(systemdDir, "outlook-sync.timer"), "utf8");
-  assert.match(service, /ExecStart=\/usr\/local\/bin\/outlook-sync sync-once/);
+  const service = fs.readFileSync(path.join(systemdDir, "ete-look-sync.service"), "utf8");
+  const timer = fs.readFileSync(path.join(systemdDir, "ete-look-sync.timer"), "utf8");
+  assert.match(service, /ExecStart=\/usr\/local\/bin\/ete-look-sync sync-once/);
   assert.match(timer, /OnCalendar=\*:0\/15/);
 
   assert.deepEqual(
     calls.map((c) => c.args),
-    [["daemon-reload"], ["enable", "--now", "outlook-sync.timer"]],
+    [["daemon-reload"], ["enable", "--now", "ete-look-sync.timer"]],
   );
 });
 
@@ -140,19 +140,19 @@ test("runSetupTimer surfaces a non-zero systemctl status", async () => {
 test("runRemoveTimer disables and deletes both units", async () => {
   const systemdDir = fs.mkdtempSync(path.join(os.tmpdir(), "timer-remove-"));
   // Seed with both units so removal has something to do.
-  fs.writeFileSync(path.join(systemdDir, "outlook-sync.service"), "stub");
-  fs.writeFileSync(path.join(systemdDir, "outlook-sync.timer"), "stub");
+  fs.writeFileSync(path.join(systemdDir, "ete-look-sync.service"), "stub");
+  fs.writeFileSync(path.join(systemdDir, "ete-look-sync.timer"), "stub");
 
   const { deps, calls } = makeDeps({ systemdDir });
   const code = await runRemoveTimer(deps);
   assert.equal(code, 0);
 
-  assert.equal(fs.existsSync(path.join(systemdDir, "outlook-sync.service")), false);
-  assert.equal(fs.existsSync(path.join(systemdDir, "outlook-sync.timer")), false);
+  assert.equal(fs.existsSync(path.join(systemdDir, "ete-look-sync.service")), false);
+  assert.equal(fs.existsSync(path.join(systemdDir, "ete-look-sync.timer")), false);
   // disable --now first, then daemon-reload after the unlinks.
   assert.deepEqual(
     calls.map((c) => c.args),
-    [["disable", "--now", "outlook-sync.timer"], ["daemon-reload"]],
+    [["disable", "--now", "ete-look-sync.timer"], ["daemon-reload"]],
   );
 });
 

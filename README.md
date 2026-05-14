@@ -9,12 +9,18 @@ Node/TypeScript rewrite of
 `etebase` npm SDK instead of the abandoned Python one. The Etebase
 backend is the default; CalDAV is also supported.
 
+> The CLI binary is **`ete-look-sync`** (a portmanteau of EteSync +
+> Outlook). State and config still live under `~/.local/state/outlook-sync/`
+> and `~/.config/outlook-sync/` so the Python predecessor (and the
+> `migrate-legacy` import path) can keep reading the same files
+> during cutover.
+
 ## How it works
 
-1. A one-time `outlook-sync login` opens a real Chromium via
+1. A one-time `ete-look-sync login` opens a real Chromium via
    Playwright, drives Microsoft's sign-in flow, and saves the cookies
    plus the MSAL Bearer token to `~/.local/state/outlook-sync/`.
-2. Every `outlook-sync sync-once` replays that session against
+2. Every `ete-look-sync sync-once` replays that session against
    `service.svc`, fetches all events in a rolling
    (`days_back`/`days_forward`) window, and pushes only the changes
    to the configured backend.
@@ -42,7 +48,7 @@ git clone https://github.com/<you>/etesync-outlook-calendar-sync.git
 cd etesync-outlook-calendar-sync
 npm install
 npm run build
-npm install -g .     # puts `outlook-sync` on $PATH
+npm install -g .     # puts `ete-look-sync` on $PATH
 
 # One-time Playwright browser download:
 npx playwright install chromium
@@ -71,10 +77,10 @@ You need two logins: Microsoft (for the OWA bearer token) and Etebase
 
 ```bash
 # 1. Microsoft sign-in — opens a browser window.
-outlook-sync login
+ete-look-sync login
 
 # 2. Etebase server + collection picker — only if backend = "etebase".
-outlook-sync login-etebase
+ete-look-sync login-etebase
 ```
 
 The `login-etebase` command prints a `[etebase]` block to copy into
@@ -85,13 +91,13 @@ your `config.toml` (the chosen `collection_uid` in particular).
 Always start with a dry run to see the plan:
 
 ```bash
-outlook-sync sync-once --dry-run
+ete-look-sync sync-once --dry-run
 ```
 
 Once that looks right:
 
 ```bash
-outlook-sync sync-once
+ete-look-sync sync-once
 ```
 
 Common flags:
@@ -107,14 +113,14 @@ Common flags:
 ## Periodic runs (systemd)
 
 ```bash
-outlook-sync setup-timer --dry-run   # preview unit files
-outlook-sync setup-timer             # install + enable
+ete-look-sync setup-timer --dry-run   # preview unit files
+ete-look-sync setup-timer             # install + enable
 ```
 
 This writes two units to `~/.config/systemd/user/`:
 
 ```ini
-# outlook-sync.service
+# ete-look-sync.service
 [Unit]
 Description=Outlook calendar → personal calendar sync (one-shot)
 After=network-online.target
@@ -122,19 +128,19 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/outlook-sync sync-once
+ExecStart=/usr/local/bin/ete-look-sync sync-once
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=outlook-sync
+SyslogIdentifier=ete-look-sync
 
 [Install]
 WantedBy=default.target
 ```
 
 ```ini
-# outlook-sync.timer
+# ete-look-sync.timer
 [Unit]
-Description=Run outlook-sync every 30 minutes
+Description=Run ete-look-sync every 30 minutes
 
 [Timer]
 OnCalendar=*:0/30
@@ -147,10 +153,10 @@ WantedBy=timers.target
 Operate it like any user timer:
 
 ```bash
-systemctl --user list-timers outlook-sync.timer
-journalctl --user -u outlook-sync.service -f
-systemctl --user start outlook-sync.service   # run now
-outlook-sync remove-timer                     # uninstall
+systemctl --user list-timers ete-look-sync.timer
+journalctl --user -u ete-look-sync.service -f
+systemctl --user start ete-look-sync.service   # run now
+ete-look-sync remove-timer                     # uninstall
 ```
 
 ## Other subcommands
@@ -249,4 +255,4 @@ in imports, `npm run typecheck` not `npx tsc`, etc.).
 
 ## License
 
-MIT — same as `ete-stethic` and the Python predecessor.
+MIT.

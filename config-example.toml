@@ -1,4 +1,7 @@
-# outlook-sync configuration example
+# ete-look-sync configuration example
+#
+# (The config directory is still ~/.config/outlook-sync/ — kept
+# as-is so the Python predecessor and migrate-legacy share state.)
 #
 # Copy this file to ~/.config/outlook-sync/config.toml and fill in
 # your values:
@@ -65,7 +68,7 @@ server_url = "https://api.etebase.com"
 # Env: OUTLOOK_SYNC_ETEBASE_USERNAME
 username = ""
 
-# Collection UID to push events into. Run `outlook-sync
+# Collection UID to push events into. Run `ete-look-sync
 # login-etebase` once; it lists your collections and prints the
 # UID for you to paste here.
 # Env: OUTLOOK_SYNC_ETEBASE_COLLECTION_UID

@@ -2,10 +2,10 @@
 //
 // Two units are written to ~/.config/systemd/user/:
 //
-//   outlook-sync.service — oneshot service that runs `outlook-sync sync-once`
-//   outlook-sync.timer   — calendar timer that fires it every N minutes
+//   ete-look-sync.service — oneshot service that runs `ete-look-sync sync-once`
+//   ete-look-sync.timer   — calendar timer that fires it every N minutes
 //
-// The bin path is whatever resolved `outlook-sync` from the user's
+// The bin path is whatever resolved `ete-look-sync` from the user's
 // PATH at setup time (i.e. wherever `npm i -g .` installed the
 // shim). When the timer fires, systemd re-resolves the unit's
 // ExecStart against the user's PATH only if the path is unqualified
@@ -21,8 +21,8 @@ import { getLogger } from "./log.js";
 
 const log = getLogger("timer");
 
-const SERVICE_NAME = "outlook-sync.service";
-const TIMER_NAME = "outlook-sync.timer";
+const SERVICE_NAME = "ete-look-sync.service";
+const TIMER_NAME = "ete-look-sync.timer";
 
 export interface TimerDeps {
   /** Resolve the absolute path to the installed CLI. */
@@ -51,7 +51,7 @@ export async function runSetupTimer(
   const binPath = deps.resolveBinPath();
   if (!binPath) {
     process.stderr.write(
-      "[timer] could not locate the outlook-sync executable on PATH.\n" +
+      "[timer] could not locate the ete-look-sync executable on PATH.\n" +
         "        Install the CLI first (e.g. `npm i -g .` from the repo).\n",
     );
     return 1;
@@ -89,7 +89,7 @@ export async function runSetupTimer(
     return enable.status;
   }
 
-  process.stdout.write(`\n[timer] outlook-sync will run every ${cfg.intervalMinutes} min\n`);
+  process.stdout.write(`\n[timer] ete-look-sync will run every ${cfg.intervalMinutes} min\n`);
   process.stdout.write(`[timer] next fire:  systemctl --user list-timers ${TIMER_NAME}\n`);
   process.stdout.write(`[timer] live logs:  journalctl --user -u ${SERVICE_NAME} -f\n`);
   process.stdout.write(`[timer] run now:    systemctl --user start ${SERVICE_NAME}\n`);
@@ -116,7 +116,7 @@ export async function runRemoveTimer(
   if (reload.status !== 0) {
     log.warn(`[timer] systemctl daemon-reload returned ${reload.status}: ${reload.stderr.trim()}`);
   }
-  process.stdout.write("[timer] outlook-sync timer removed\n");
+  process.stdout.write("[timer] ete-look-sync timer removed\n");
   return 0;
 }
 
@@ -133,7 +133,7 @@ Type=oneshot
 ExecStart=${binPath} sync-once
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=outlook-sync
+SyslogIdentifier=ete-look-sync
 
 [Install]
 WantedBy=default.target
@@ -146,7 +146,7 @@ export function renderTimerUnit(intervalMinutes: number): string {
   // before or not. Persistent=true catches up a missed fire after a
   // suspend/shutdown.
   return `[Unit]
-Description=Run outlook-sync every ${intervalMinutes} minutes
+Description=Run ete-look-sync every ${intervalMinutes} minutes
 
 [Timer]
 OnCalendar=*:0/${intervalMinutes}
@@ -161,10 +161,10 @@ WantedBy=timers.target
 
 function resolveBinPath(): string | null {
   // Prefer the shim that landed in PATH (e.g. `npm i -g .` puts an
-  // `outlook-sync` script in npm's global bin). Falling back to
+  // `ete-look-sync` script in npm's global bin). Falling back to
   // process.argv[1] lets the user run from a checkout without a
   // global install.
-  const which = spawnSync("which", ["outlook-sync"], { encoding: "utf8" });
+  const which = spawnSync("which", ["ete-look-sync"], { encoding: "utf8" });
   if (which.status === 0) {
     const out = which.stdout.trim();
     if (out) return out;
