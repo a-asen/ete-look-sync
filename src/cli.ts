@@ -24,6 +24,7 @@ import { dirname } from "node:path";
 import { capture } from "./auth/capture.js";
 import { loadConfig } from "./config.js";
 import { runEtebaseLogin } from "./etebase_login.js";
+import { runEtebaseWipe } from "./etebase_wipe.js";
 import { setupLogging } from "./log.js";
 import { migrateLegacy } from "./migrate.js";
 import { runProbe } from "./probe.js";
@@ -143,6 +144,16 @@ async function main(argv: readonly string[]): Promise<number> {
     .description("Stop, disable, and delete the installed systemd units.")
     .action(async () => {
       const code = await runRemoveTimer();
+      process.exit(code);
+    });
+
+  program
+    .command("wipe-etebase")
+    .description("Delete every item from the configured Etebase collection. Dry-run by default.")
+    .option("--force", "Actually delete; without this it just shows what would go.")
+    .action(async (opts: { force?: boolean }) => {
+      const wipeOpts = opts.force ? { force: true } : {};
+      const code = await runEtebaseWipe(loadConfig(), wipeOpts);
       process.exit(code);
     });
 

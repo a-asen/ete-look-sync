@@ -80,8 +80,21 @@ export async function fetchCalendarView(
   start: Date,
   end: Date,
 ): Promise<Event[]> {
+  // Wrap any callService failure (DNS, TLS handshake, undici
+  // `fetch failed` TypeErrors) in FetchError so the orchestrator's
+  // catch block records it in SyncSummary.errors instead of letting
+  // a TypeError bubble out as a crash.
   return fetchCalendarViewWith(
-    (action, body) => callService(session, cfg, action, body),
+    async (action, body) => {
+      try {
+        return await callService(session, cfg, action, body);
+      } catch (err) {
+        if (err instanceof FetchError) throw err;
+        throw new FetchError(
+          `${action} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
     start,
     end,
   );
