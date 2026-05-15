@@ -204,10 +204,15 @@ async function waitForBearer(
   while (Date.now() < deadline) {
     let entries: MsalEntry[] = [];
     try {
-      entries = (await page.evaluate(MSAL_SCAN_SCRIPT)) as MsalEntry[];
+      // Any evaluate failure just means the page isn't ready yet.
+      const raw: unknown = await page.evaluate(MSAL_SCAN_SCRIPT);
+      // Defensive: Playwright's evaluate can yield `undefined` if the
+      // page navigates mid-call or the script returns a non-
+      // serialisable value. Better to no-op this tick than crash the
+      // login.
+      entries = Array.isArray(raw) ? (raw as MsalEntry[]) : [];
       lastErr = "";
     } catch (e) {
-      // Any evaluate failure just means the page isn't ready yet.
       lastErr = toMessage(e);
     }
     const record = pickBestToken(entries, Math.floor(Date.now() / 1000));
@@ -335,7 +340,12 @@ export interface MsalEntry {
 // MSAL v2 stores accesstokens under keys containing 'accesstoken' (case-
 // insensitive) with JSON values like {secret, expiresOn, realm, target, ...}.
 // `secret` is the JWT.
-const MSAL_SCAN_SCRIPT = `() => {
+//
+// Wrapped as an IIFE so `page.evaluate(MSAL_SCAN_SCRIPT)` resolves
+// to the function's RETURN value, not the function object itself. A
+// bare `() => { … }` string evaluates to the arrow function, which
+// is non-serialisable and comes back as `undefined`.
+const MSAL_SCAN_SCRIPT = `(() => {
   const out = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -346,7 +356,7 @@ const MSAL_SCAN_SCRIPT = `() => {
     } catch (_) {}
   }
   return out;
-}`;
+})()`;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
