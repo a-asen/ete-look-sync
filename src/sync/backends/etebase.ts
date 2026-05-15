@@ -50,6 +50,16 @@ export interface EtebaseOps {
     content: string;
     meta: { name: string; mtime: number; type: string };
   }): Promise<EtebaseItemSnapshot>;
+  /**
+   * Bulk-create items in a single batch round trip. Order in →
+   * order out. Production passes all items to
+   * `itemManager.batch([...])` once; tests can short-circuit by
+   * looping `createItem`.
+   */
+  createItems(args: ReadonlyArray<{
+    content: string;
+    meta: { name: string; mtime: number; type: string };
+  }>): Promise<EtebaseItemSnapshot[]>;
   /** Update content on an existing item; returns new etag (uid is stable). */
   updateItem(args: {
     uid: string;
@@ -128,6 +138,19 @@ export class EtebaseBackend implements Backend {
     return { remoteId: created.uid, remoteEtag: created.etag };
   }
 
+  async upsertMany(events: readonly Event[]): Promise<PushResult[]> {
+    const args = events.map((event) => ({
+      content: renderEvent(event),
+      meta: {
+        name: event.subject || "(no subject)",
+        mtime: Date.now(),
+        type: "VEVENT",
+      },
+    }));
+    const created = await this.ops.createItems(args);
+    return created.map((snap) => ({ remoteId: snap.uid, remoteEtag: snap.etag }));
+  }
+
   async delete(remoteId: string): Promise<void> {
     let existing: EtebaseItemSnapshot | null;
     try {
@@ -179,6 +202,15 @@ function makeSdkOps(itemManager: ItemManager): EtebaseOps {
       const item = await itemManager.create(meta, content);
       await itemManager.batch([item]);
       return { uid: item.uid, etag: item.etag };
+    },
+    async createItems(args) {
+      // Build every Item locally first so the heavy lifting (encrypt
+      // + hash) parallelises, then ship them in one network batch.
+      const items = await Promise.all(
+        args.map((a) => itemManager.create(a.meta, a.content)),
+      );
+      await itemManager.batch(items);
+      return items.map((item) => ({ uid: item.uid, etag: item.etag }));
     },
     async updateItem({ uid, content }) {
       // `etag` is implicit in the fetched item — we re-fetch to get the

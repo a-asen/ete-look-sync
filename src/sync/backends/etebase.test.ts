@@ -77,6 +77,18 @@ function makeFakeOps(initial: Array<{ uid: string; content: string }> = [], conf
       store.items.set(uid, { uid, etag, content: args.content });
       return { uid, etag };
     },
+    async createItems(args) {
+      if (config.createThrows) throw config.createThrows;
+      const out = [];
+      for (const a of args) {
+        store.creates.push(a);
+        const uid = `uid-${++store.nextUid}`;
+        const etag = `etag-${++store.nextEtag}`;
+        store.items.set(uid, { uid, etag, content: a.content });
+        out.push({ uid, etag });
+      }
+      return out;
+    },
     async updateItem(args) {
       const t = config.updateThrows?.get(args.uid);
       if (t) throw t;

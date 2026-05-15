@@ -47,6 +47,21 @@ export interface Backend {
   upsert(event: Event, opts?: UpsertOptions): Promise<PushResult>;
 
   /**
+   * Optional bulk-create entry point. When present, the orchestrator
+   * routes brand-new creates through here in chunks instead of
+   * calling `upsert()` per event. Backends with a real batch API
+   * (Etebase's ItemManager.batch) implement this and get a large
+   * speedup on initial backfills; backends without one (CalDAV PUTs
+   * are one resource at a time) leave it undefined and the
+   * orchestrator falls back to single-event upsert.
+   *
+   * Result order must match the input order. All-or-nothing
+   * semantics expected: if the batch fails, treat every input event
+   * as failed (no partial commits leaking out).
+   */
+  upsertMany?(events: readonly Event[]): Promise<PushResult[]>;
+
+  /**
    * Delete the remote resource identified by `remoteId`.
    *
    * Implementations should treat "already gone" as success so a retry

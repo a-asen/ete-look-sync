@@ -85,6 +85,42 @@ class FakeBackend implements Backend {
   }
 }
 
+/** Backend that advertises upsertMany so the orchestrator routes creates through it. */
+class FakeBatchBackend implements Backend {
+  /** One entry per upsertMany call, with the chunk size. */
+  batches: Array<{ size: number; itemIds: string[] }> = [];
+  /** Single-event fallback (updates, fix-errors). */
+  singles: Array<{ itemId: string; existingId?: string }> = [];
+  deletes: string[] = [];
+  closed = false;
+  failBatchAt = -1;
+
+  async upsert(event: Event, opts: UpsertOptions = {}): Promise<PushResult> {
+    this.singles.push(
+      opts.existingId
+        ? { itemId: event.itemId, existingId: opts.existingId }
+        : { itemId: event.itemId },
+    );
+    return { remoteId: `rid-${event.itemId}`, remoteEtag: "etag-single" };
+  }
+
+  async upsertMany(events: readonly Event[]): Promise<PushResult[]> {
+    this.batches.push({ size: events.length, itemIds: events.map((e) => e.itemId) });
+    if (this.failBatchAt === this.batches.length - 1) {
+      throw new Error("forced batch failure");
+    }
+    return events.map((e) => ({ remoteId: `rid-${e.itemId}`, remoteEtag: "etag-batch" }));
+  }
+
+  async delete(remoteId: string): Promise<void> {
+    this.deletes.push(remoteId);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
 function makeSession(): Session {
   return {
     bearer: { token: "t", expires_on: Math.floor(Date.now() / 1000) + 3600 },
@@ -291,4 +327,93 @@ test("runFixErrors is a no-op when nothing has failed", async () => {
     },
   }));
   assert.equal(summary.errors.length, 0);
+});
+
+// ---------- batched-create path ----------
+
+test("runSyncOnce routes creates through upsertMany when the backend supports it", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const backend = new FakeBatchBackend();
+  // 120 events → 3 chunks of 50/50/20 at the default CREATE_BATCH_SIZE.
+  const events = Array.from({ length: 120 }, (_, i) =>
+    makeEvent(`e${i.toString().padStart(3, "0")}`, "2026-05-15T10:00:00Z", `evt ${i}`),
+  );
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => events,
+    openBackend: async () => backend,
+  }));
+
+  assert.equal(summary.errors.length, 0);
+  assert.equal(summary.pushedCreates, 120);
+  // Single-event upsert was NOT called for creates.
+  assert.equal(backend.singles.length, 0);
+  // Three batches expected.
+  assert.equal(backend.batches.length, 3);
+  assert.equal(backend.batches[0]!.size, 50);
+  assert.equal(backend.batches[1]!.size, 50);
+  assert.equal(backend.batches[2]!.size, 20);
+});
+
+test("upsertMany failure marks every event in the chunk as failed", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const backend = new FakeBatchBackend();
+  backend.failBatchAt = 1; // second chunk explodes
+  const events = Array.from({ length: 80 }, (_, i) =>
+    makeEvent(`e${i}`, "2026-05-15T10:00:00Z"),
+  );
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => events,
+    openBackend: async () => backend,
+  }));
+  // First batch (50) succeeded; second batch (30) all failed.
+  assert.equal(summary.pushedCreates, 50);
+  assert.equal(summary.errors.length, 30);
+
+  const store = new Store(cfg.dbFile);
+  try {
+    // Successful rows have null pushError; failed rows have the batch's error text.
+    assert.equal(store.get("e0")!.pushError, null);
+    assert.match(store.get("e60")!.pushError ?? "", /forced batch failure/);
+  } finally {
+    store.close();
+  }
+});
+
+test("runFixErrors uses single-event upsert even when upsertMany exists", async () => {
+  // fix-errors retries one-at-a-time so a single bad row can't poison
+  // a whole batch; verify the orchestrator stays on `upsert()` there.
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const failBackend = new FakeBackend();
+  failBackend.shouldFail.add("bad");
+  await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => [
+      makeEvent("good", "2026-05-15T10:00:00Z"),
+      makeEvent("bad", "2026-05-15T11:00:00Z"),
+    ],
+    openBackend: async () => failBackend,
+  }));
+
+  const retryBackend = new FakeBatchBackend();
+  const summary = await runFixErrorsWith(cfg, {}, depsWith({
+    openBackend: async () => retryBackend,
+  }));
+  assert.equal(summary.errors.length, 0);
+  // fix-errors went through the single-event path despite upsertMany being available.
+  assert.equal(retryBackend.batches.length, 0);
+  assert.equal(retryBackend.singles.length, 1);
+  assert.equal(retryBackend.singles[0]!.itemId, "bad");
+});
+
+test("single-create-only run skips batching even on a bulk-capable backend", async () => {
+  // The orchestrator's `totalCreates > 1` guard is a tiny perf optimisation
+  // to avoid wrapping a single push in a batch wrapper. Pin it.
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const backend = new FakeBatchBackend();
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => [makeEvent("solo", "2026-05-15T10:00:00Z")],
+    openBackend: async () => backend,
+  }));
+  assert.equal(summary.pushedCreates, 1);
+  assert.equal(backend.batches.length, 0);
+  assert.equal(backend.singles.length, 1);
 });

@@ -273,6 +273,11 @@ export async function runFixErrorsWith(
 
 // ---------- internals ----------
 
+// How many creates to ship per upsertMany() call when the backend
+// supports bulk inserts. Etebase's batch endpoint timed out (504) on
+// very large batches in practice; 50 has proven reliable.
+const CREATE_BATCH_SIZE = 50;
+
 async function executePlan(
   diff: Diff,
   store: Store,
@@ -280,23 +285,65 @@ async function executePlan(
   summary: SyncSummary,
 ): Promise<void> {
   const backendName = currentBackendName(store);
+  const totalCreates = diff.creates.length;
 
-  for (const event of diff.creates) {
-    try {
-      const result = await backend.upsert(event);
-      store.upsert(event);
-      store.markPushed(event.itemId, {
-        remoteId: result.remoteId,
-        remoteEtag: result.remoteEtag,
-        backend: backendName ?? "",
-      });
-      summary.pushedCreates++;
-    } catch (err) {
-      const msg = `create ${event.subject}: ${describeError(err)}`;
-      summary.errors.push(msg);
-      log.error(`[sync] ${msg}`);
-      store.upsert(event);
-      store.markFailed(event.itemId, describeError(err));
+  // Bulk path: the backend advertised upsertMany() (Etebase), so we
+  // chunk creates and ship each chunk in one round trip. On batch
+  // failure every event in the chunk is marked failed; fix-errors
+  // will retry them one at a time via the single-event upsert path.
+  if (backend.upsertMany && totalCreates > 1) {
+    let pushed = 0;
+    for (let i = 0; i < totalCreates; i += CREATE_BATCH_SIZE) {
+      const chunk = diff.creates.slice(i, i + CREATE_BATCH_SIZE);
+      try {
+        const results = await backend.upsertMany(chunk);
+        for (let j = 0; j < chunk.length; j++) {
+          const event = chunk[j]!;
+          const result = results[j]!;
+          store.upsert(event);
+          store.markPushed(event.itemId, {
+            remoteId: result.remoteId,
+            remoteEtag: result.remoteEtag,
+            backend: backendName ?? "",
+          });
+          summary.pushedCreates++;
+        }
+      } catch (err) {
+        const desc = describeError(err);
+        log.error(`[sync] batch create failed (${chunk.length} items): ${desc}`);
+        for (const event of chunk) {
+          summary.errors.push(`create ${event.subject}: ${desc}`);
+          store.upsert(event);
+          store.markFailed(event.itemId, desc);
+        }
+      }
+      pushed += chunk.length;
+      log.info(`[sync] pushed ${pushed}/${totalCreates} creates`);
+    }
+  } else {
+    // Single-event fallback (CalDAV, or a one-event run).
+    let pushed = 0;
+    for (const event of diff.creates) {
+      try {
+        const result = await backend.upsert(event);
+        store.upsert(event);
+        store.markPushed(event.itemId, {
+          remoteId: result.remoteId,
+          remoteEtag: result.remoteEtag,
+          backend: backendName ?? "",
+        });
+        summary.pushedCreates++;
+      } catch (err) {
+        const msg = `create ${event.subject}: ${describeError(err)}`;
+        summary.errors.push(msg);
+        log.error(`[sync] ${msg}`);
+        store.upsert(event);
+        store.markFailed(event.itemId, describeError(err));
+      }
+      pushed++;
+      if (pushed % 50 === 0 || pushed === totalCreates) {
+        log.info(`[sync] pushed ${pushed}/${totalCreates} creates`);
+      }
     }
   }
 

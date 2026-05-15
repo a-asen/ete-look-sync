@@ -70,7 +70,7 @@ async function main(argv: readonly string[]): Promise<number> {
     .command("sync-once")
     .description("One fetch + diff cycle. Without --dry-run, pushes to the configured backend.")
     .option("--dry-run", "Compute and print the diff without touching the backend.")
-    .option("--days-back <n>", "Days of past events to include.", asInt)
+    .option("--days-back <n>", "Days of past events to include. Pass 'all' to fetch everything OWA still holds (~100 years).", asDaysBack)
     .option("--days-forward <n>", "Days of future events to include.", asInt)
     .option("--allow-empty-fetch", "Skip the safety check that aborts when Exchange returns 0 events but deletions are pending.")
     .option("--no-freeze-past", "Push historical events too (disables the today−N cutoff). Use once for initial backfill.")
@@ -194,6 +194,19 @@ function asInt(raw: string): number {
     throw new Error(`expected an integer, got ${JSON.stringify(raw)}`);
   }
   return Math.trunc(n);
+}
+
+// `--days-back all` is a convenience for "fetch everything OWA still
+// holds." Exchange seldom keeps more than ~10 years on a regular
+// mailbox, but we use a 100-year ceiling so the rare 20-year archive
+// also slips through. Empty FindItem chunks before the calendar
+// existed return in ~100ms each — negligible cost for the
+// not-having-to-guess gain.
+const ALL_DAYS_BACK = 36500;
+
+function asDaysBack(raw: string): number {
+  if (raw.toLowerCase() === "all") return ALL_DAYS_BACK;
+  return asInt(raw);
 }
 
 main(process.argv).catch((err: unknown) => {
