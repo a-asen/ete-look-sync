@@ -43,6 +43,7 @@ interface SystemctlCall {
 
 function makeDeps(opts: {
   binPath?: string | null;
+  nodePath?: string;
   systemdDir: string;
   systemctlStatus?: number;
 }): { deps: TimerDeps; calls: SystemctlCall[] } {
@@ -50,10 +51,12 @@ function makeDeps(opts: {
   // null is explicit "no bin found"; undefined falls back to the default.
   const binPath =
     "binPath" in opts ? opts.binPath ?? null : "/usr/local/bin/ete-look-sync";
+  const nodePath = opts.nodePath ?? "/usr/local/bin/node";
   return {
     calls,
     deps: {
       resolveBinPath: () => binPath,
+      resolveNodePath: () => nodePath,
       systemdUserDir: () => opts.systemdDir,
       systemctl: (args) => {
         calls.push({ args: [...args] });
@@ -65,9 +68,11 @@ function makeDeps(opts: {
 
 // ---------- unit rendering ----------
 
-test("renderServiceUnit pins the resolved bin path", () => {
-  const unit = renderServiceUnit("/usr/local/bin/ete-look-sync");
-  assert.match(unit, /ExecStart=\/usr\/local\/bin\/ete-look-sync sync-once/);
+test("renderServiceUnit pins the resolved node + bin paths", () => {
+  const unit = renderServiceUnit("/usr/local/bin/ete-look-sync", "/usr/local/bin/node");
+  // ExecStart explicitly names the Node binary so a stripped-PATH
+  // systemd session can't fall back to a wrong Node.
+  assert.match(unit, /ExecStart=\/usr\/local\/bin\/node \/usr\/local\/bin\/ete-look-sync sync-once/);
   assert.match(unit, /Type=oneshot/);
   assert.match(unit, /WantedBy=default\.target/);
   assert.match(unit, /After=network-online\.target/);
@@ -83,7 +88,7 @@ test("renderTimerUnit uses the configured interval", () => {
 test("renderServiceUnit and renderTimerUnit output ends with a newline", () => {
   // systemd is lenient about trailing newlines, but conventional
   // unit files end with one — pinning here avoids future drift.
-  assert.ok(renderServiceUnit("/x").endsWith("\n"));
+  assert.ok(renderServiceUnit("/x", "/node").endsWith("\n"));
   assert.ok(renderTimerUnit(30).endsWith("\n"));
 });
 
@@ -109,7 +114,7 @@ test("runSetupTimer writes both unit files and runs daemon-reload + enable", asy
 
   const service = fs.readFileSync(path.join(systemdDir, "ete-look-sync.service"), "utf8");
   const timer = fs.readFileSync(path.join(systemdDir, "ete-look-sync.timer"), "utf8");
-  assert.match(service, /ExecStart=\/usr\/local\/bin\/ete-look-sync sync-once/);
+  assert.match(service, /ExecStart=\/usr\/local\/bin\/node \/usr\/local\/bin\/ete-look-sync sync-once/);
   assert.match(timer, /OnCalendar=\*:0\/15/);
 
   assert.deepEqual(

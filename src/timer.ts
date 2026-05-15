@@ -25,8 +25,18 @@ const SERVICE_NAME = "ete-look-sync.service";
 const TIMER_NAME = "ete-look-sync.timer";
 
 export interface TimerDeps {
-  /** Resolve the absolute path to the installed CLI. */
+  /** Resolve the absolute path to the installed CLI shim. */
   resolveBinPath: () => string | null;
+  /**
+   * Resolve the absolute path to the Node binary that should run
+   * the CLI. We pin it in the unit instead of relying on the shim's
+   * `#!/usr/bin/env node`, because systemd user services start with
+   * a stripped PATH that doesn't include nvm/asdf shims — env would
+   * silently pick up the system Node and a native dep (like
+   * better-sqlite3) compiled against the project's Node version
+   * would then refuse to load.
+   */
+  resolveNodePath: () => string;
   /** Where systemd user units are written. */
   systemdUserDir: () => string;
   /** Wraps `systemctl --user …` so tests can avoid touching real systemd. */
@@ -35,6 +45,7 @@ export interface TimerDeps {
 
 const defaultDeps: TimerDeps = {
   resolveBinPath,
+  resolveNodePath: () => process.execPath,
   systemdUserDir: () => path.join(os.homedir(), ".config", "systemd", "user"),
   systemctl: (args) => {
     const result = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
@@ -57,7 +68,8 @@ export async function runSetupTimer(
     return 1;
   }
 
-  const serviceContent = renderServiceUnit(binPath);
+  const nodePath = deps.resolveNodePath();
+  const serviceContent = renderServiceUnit(binPath, nodePath);
   const timerContent = renderTimerUnit(cfg.intervalMinutes);
   const dir = deps.systemdUserDir();
   const servicePath = path.join(dir, SERVICE_NAME);
@@ -122,7 +134,11 @@ export async function runRemoveTimer(
 
 // ---------- unit rendering (exported for tests) ----------
 
-export function renderServiceUnit(binPath: string): string {
+export function renderServiceUnit(binPath: string, nodePath: string): string {
+  // ExecStart invokes Node directly with the CLI shim as its first
+  // argument. Bypasses the shim's `#!/usr/bin/env node` so a
+  // stripped-PATH systemd session can't fall back to the system Node
+  // (and break a Node-version-bound native dep like better-sqlite3).
   return `[Unit]
 Description=Outlook calendar → personal calendar sync (one-shot)
 After=network-online.target
@@ -130,7 +146,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${binPath} sync-once
+ExecStart=${nodePath} ${binPath} sync-once
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ete-look-sync
