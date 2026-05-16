@@ -4,7 +4,7 @@ Headless mirror of an Outlook (Microsoft 365 / OWA) calendar to a
 personal EteSync calendar — or any CalDAV server.
 
 Node/TypeScript rewrite of
-[`etesync-outlook-calendar-scraper-sync`](https://github.com/a-asen/etesync-outlook-calendar-scraper-sync)
+[`ete-look-sync--py--old`](https://github.com/a-asen/ete-look-sync--py--old)
 (Python). Same goal, but built around the actively-maintained
 `etebase` npm SDK instead of the abandoned Python one. The Etebase
 backend is the default; CalDAV is also supported.
