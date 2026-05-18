@@ -5,6 +5,7 @@
 // `sync-once` and any future timer-driven entry point share the same
 // `runSyncOnce` call.
 
+import { maybeSilentRefresh } from "../auth/capture.js";
 import { loadSession, SessionExpired, SessionNotCaptured, type Session } from "../auth/session.js";
 import type { Config } from "../config.js";
 import { fetchCalendarView, FetchError } from "../fetch/owa.js";
@@ -44,6 +45,14 @@ export interface SyncOptions {
 
 /** Internals re-exported for tests; production callers use `runSyncOnce`. */
 export interface SyncDeps {
+  /**
+   * Headless token top-up attempted before loadSession. A no-op when
+   * the saved bearer still has comfortable headroom; otherwise replays
+   * the persistent Chromium profile to mint a fresh token unattended.
+   * Never throws — failures are logged and the stale token is left for
+   * loadSession's expiry guard to surface.
+   */
+  maybeSilentRefresh: (cfg: Config) => Promise<void>;
   loadSession: (cfg: Config) => Session;
   fetchEvents: (session: Session, cfg: Config, start: Date, end: Date) => Promise<Event[]>;
   openStore: (cfg: Config) => Store;
@@ -52,6 +61,7 @@ export interface SyncDeps {
 }
 
 const defaultDeps: SyncDeps = {
+  maybeSilentRefresh,
   loadSession,
   fetchEvents: fetchCalendarView,
   openStore: (cfg) => new Store(cfg.dbFile),
@@ -80,6 +90,8 @@ export async function runSyncOnceWith(
   log.info(
     `[sync] window ${dateOnly(fetchStart)} → ${dateOnly(fetchEnd)} (-${daysBack}d / +${daysForward}d)`,
   );
+
+  await deps.maybeSilentRefresh(cfg);
 
   let session: Session;
   try {

@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import type { Session } from "../auth/session.js";
+import { SessionExpired, type Session } from "../auth/session.js";
 import type { Config } from "../config.js";
 import { type Event } from "../models.js";
 import { Store } from "../store.js";
@@ -131,6 +131,7 @@ function makeSession(): Session {
 
 function depsWith(overrides: Partial<SyncDeps>): SyncDeps {
   return {
+    maybeSilentRefresh: async () => {},
     loadSession: () => makeSession(),
     fetchEvents: async () => [],
     openStore: (c) => new Store(c.dbFile),
@@ -254,6 +255,44 @@ test("runSyncOnce dry-run makes no writes and reports the diff", async () => {
   } finally {
     store.close();
   }
+});
+
+test("runSyncOnce attempts a silent refresh before loading the session", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const calls: string[] = [];
+
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    maybeSilentRefresh: async () => {
+      calls.push("refresh");
+    },
+    loadSession: () => {
+      calls.push("load");
+      return makeSession();
+    },
+  }));
+
+  assert.equal(summary.errors.length, 0);
+  assert.deepEqual(calls, ["refresh", "load"]);
+});
+
+test("runSyncOnce surfaces SessionExpired when silent refresh can't save it", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  let refreshed = false;
+
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    // Silent refresh ran but MFA was required, so it left the stale
+    // token in place — loadSession's guard then fires.
+    maybeSilentRefresh: async () => {
+      refreshed = true;
+    },
+    loadSession: () => {
+      throw new SessionExpired("Saved bearer token is expired (exp=1). Run `ete-look-sync login` to refresh.");
+    },
+  }));
+
+  assert.equal(refreshed, true);
+  assert.equal(summary.errors.length, 1);
+  assert.match(summary.errors[0]!, /expired/);
 });
 
 // ---------- per-event error capture ----------
