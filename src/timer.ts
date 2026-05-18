@@ -23,6 +23,7 @@ const log = getLogger("timer");
 
 const SERVICE_NAME = "ete-look-sync.service";
 const TIMER_NAME = "ete-look-sync.timer";
+const NOTIFY_NAME = "ete-look-sync-notify.service";
 
 export interface TimerDeps {
   /** Resolve the absolute path to the installed CLI shim. */
@@ -71,13 +72,16 @@ export async function runSetupTimer(
   const nodePath = deps.resolveNodePath();
   const serviceContent = renderServiceUnit(binPath, nodePath);
   const timerContent = renderTimerUnit(cfg.intervalMinutes);
+  const notifyContent = renderNotifyUnit();
   const dir = deps.systemdUserDir();
   const servicePath = path.join(dir, SERVICE_NAME);
   const timerPath = path.join(dir, TIMER_NAME);
+  const notifyPath = path.join(dir, NOTIFY_NAME);
 
   if (opts.dryRun) {
     process.stdout.write(`[timer] would write ${servicePath}:\n\n${serviceContent}\n`);
     process.stdout.write(`[timer] would write ${timerPath}:\n\n${timerContent}\n`);
+    process.stdout.write(`[timer] would write ${notifyPath}:\n\n${notifyContent}\n`);
     process.stdout.write("[timer] would run:\n");
     process.stdout.write("  systemctl --user daemon-reload\n");
     process.stdout.write(`  systemctl --user enable --now ${TIMER_NAME}\n`);
@@ -87,8 +91,10 @@ export async function runSetupTimer(
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(servicePath, serviceContent);
   fs.writeFileSync(timerPath, timerContent);
+  fs.writeFileSync(notifyPath, notifyContent);
   process.stdout.write(`[timer] wrote ${servicePath}\n`);
   process.stdout.write(`[timer] wrote ${timerPath}\n`);
+  process.stdout.write(`[timer] wrote ${notifyPath}\n`);
 
   const reload = deps.systemctl(["daemon-reload"]);
   if (reload.status !== 0) {
@@ -106,6 +112,10 @@ export async function runSetupTimer(
   process.stdout.write(`[timer] live logs:  journalctl --user -u ${SERVICE_NAME} -f\n`);
   process.stdout.write(`[timer] run now:    systemctl --user start ${SERVICE_NAME}\n`);
   process.stdout.write(`[timer] disable:    systemctl --user disable --now ${TIMER_NAME}\n`);
+  process.stdout.write(
+    "[timer] on failure: a desktop notification fires (via notify-send) " +
+      "prompting `ete-look-sync login` when silent refresh can't recover\n",
+  );
   return 0;
 }
 
@@ -117,7 +127,7 @@ export async function runRemoveTimer(
   deps.systemctl(["disable", "--now", TIMER_NAME]);
 
   const dir = deps.systemdUserDir();
-  for (const file of [TIMER_NAME, SERVICE_NAME]) {
+  for (const file of [TIMER_NAME, SERVICE_NAME, NOTIFY_NAME]) {
     const p = path.join(dir, file);
     if (fs.existsSync(p)) {
       fs.unlinkSync(p);
@@ -150,9 +160,32 @@ ExecStart=${nodePath} ${binPath} sync-once
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ete-look-sync
+OnFailure=${NOTIFY_NAME}
 
 [Install]
 WantedBy=default.target
+`;
+}
+
+// Triggered by the main service's OnFailure= only when a sync run
+// exits non-zero. With silent token refresh now wired in, a sustained
+// failure usually means MSAL needs a real MFA interaction — i.e. the
+// one case that genuinely requires a human to run `ete-look-sync
+// login`. We shell out so a missing notify-send (headless box, no
+// libnotify) degrades to a no-op instead of a unit-start error.
+export function renderNotifyUnit(): string {
+  // Kept free of single quotes, backticks, and `$` so it nests safely
+  // as a double-quoted argument inside systemd's single-quoted sh -c.
+  const body =
+    "ete-look-sync could not complete a sync. If the saved token expired " +
+    "and silent refresh failed, run: ete-look-sync login. " +
+    "Logs: journalctl --user -u ete-look-sync.service -e";
+  return `[Unit]
+Description=Desktop notification for ete-look-sync failure
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'command -v notify-send >/dev/null 2>&1 && notify-send --urgency=critical --app-name=ete-look-sync "Outlook calendar sync failed" "${body}" || true'
 `;
 }
 

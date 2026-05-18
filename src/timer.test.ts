@@ -6,6 +6,7 @@ import * as path from "node:path";
 
 import type { Config } from "./config.js";
 import {
+  renderNotifyUnit,
   renderServiceUnit,
   renderTimerUnit,
   runRemoveTimer,
@@ -78,6 +79,20 @@ test("renderServiceUnit pins the resolved node + bin paths", () => {
   assert.match(unit, /After=network-online\.target/);
 });
 
+test("renderServiceUnit wires OnFailure to the notify unit", () => {
+  const unit = renderServiceUnit("/x", "/node");
+  assert.match(unit, /OnFailure=ete-look-sync-notify\.service/);
+});
+
+test("renderNotifyUnit degrades to a no-op when notify-send is absent", () => {
+  const unit = renderNotifyUnit();
+  assert.match(unit, /command -v notify-send/);
+  assert.match(unit, /--urgency=critical/);
+  assert.match(unit, /ete-look-sync login/);
+  assert.match(unit, /\|\| true'/);
+  assert.ok(unit.endsWith("\n"));
+});
+
 test("renderTimerUnit uses the configured interval", () => {
   const unit = renderTimerUnit(15);
   assert.match(unit, /OnCalendar=\*:0\/15/);
@@ -144,9 +159,10 @@ test("runSetupTimer surfaces a non-zero systemctl status", async () => {
 
 test("runRemoveTimer disables and deletes both units", async () => {
   const systemdDir = fs.mkdtempSync(path.join(os.tmpdir(), "timer-remove-"));
-  // Seed with both units so removal has something to do.
+  // Seed with all three units so removal has something to do.
   fs.writeFileSync(path.join(systemdDir, "ete-look-sync.service"), "stub");
   fs.writeFileSync(path.join(systemdDir, "ete-look-sync.timer"), "stub");
+  fs.writeFileSync(path.join(systemdDir, "ete-look-sync-notify.service"), "stub");
 
   const { deps, calls } = makeDeps({ systemdDir });
   const code = await runRemoveTimer(deps);
@@ -154,6 +170,7 @@ test("runRemoveTimer disables and deletes both units", async () => {
 
   assert.equal(fs.existsSync(path.join(systemdDir, "ete-look-sync.service")), false);
   assert.equal(fs.existsSync(path.join(systemdDir, "ete-look-sync.timer")), false);
+  assert.equal(fs.existsSync(path.join(systemdDir, "ete-look-sync-notify.service")), false);
   // disable --now first, then daemon-reload after the unlinks.
   assert.deepEqual(
     calls.map((c) => c.args),
