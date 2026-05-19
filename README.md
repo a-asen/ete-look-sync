@@ -116,7 +116,11 @@ ete-look-sync setup-timer --dry-run   # preview unit files
 ete-look-sync setup-timer             # install + enable
 ```
 
-This writes two units to `~/.config/systemd/user/`:
+This writes **three** units to `~/.config/systemd/user/`: the
+`.service`, the `.timer`, and an `ete-look-sync-notify.service` that
+fires a desktop notification when a run fails. Before loading the
+session each run also attempts a headless silent token refresh, so
+routine token expiry self-heals without a manual `login`.
 
 ```ini
 # ete-look-sync.service
@@ -131,6 +135,7 @@ ExecStart=/usr/local/bin/ete-look-sync sync-once
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ete-look-sync
+OnFailure=ete-look-sync-notify.service
 
 [Install]
 WantedBy=default.target
@@ -155,8 +160,11 @@ Operate it like any user timer:
 systemctl --user list-timers ete-look-sync.timer
 journalctl --user -u ete-look-sync.service -f
 systemctl --user start ete-look-sync.service   # run now
-ete-look-sync remove-timer                     # uninstall
+ete-look-sync remove-timer                     # uninstall (all 3 units)
 ```
+
+For setup, unattended refresh behaviour, monitoring, and a
+troubleshooting table, see **[docs/operations.md](docs/operations.md)**.
 
 ## Other subcommands
 

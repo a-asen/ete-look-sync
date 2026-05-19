@@ -1,6 +1,6 @@
 # CLAUDE.md — orientation for AI sessions picking this up cold
 
-For the project's *roadmap*, read [`PLAN.md`](PLAN.md) — it has the
+For the project's *roadmap*, read [`PLAN.md`](docs/PLAN.md) — it has the
 Python→TypeScript module map, library choices, and full 15-phase plan.
 This file is just the operational stuff a fresh session would otherwise
 have to re-derive.
@@ -30,7 +30,7 @@ have to re-derive.
 **All phases complete.** The tool is now fully self-contained under
 the `ete-look-sync` name (binary, state dir, config dir, env vars,
 ICS UID suffix all use it). [`README.md`](README.md) is the canonical
-user-facing entry point; [`PLAN.md`](PLAN.md) is kept as historical
+user-facing entry point; [`PLAN.md`](docs/PLAN.md) is kept as historical
 reference.
 
 `migrate-legacy` is still wired up as a one-off utility for anyone
@@ -50,7 +50,7 @@ but it isn't required for normal use.
 
 This is the *working* tool the user runs daily. **Do not modify it as
 part of the rewrite.** It stays the production version until cutover
-(see PLAN.md → "Cutover criteria"). Read it freely as reference.
+(see docs/PLAN.md → "Cutover criteria"). Read it freely as reference.
 
 The Python conda env (used for cross-language verification, see below):
 
