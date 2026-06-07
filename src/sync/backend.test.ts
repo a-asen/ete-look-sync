@@ -15,6 +15,7 @@ import {
 // XDG paths or file IO in this test.
 function cfg(backend: Config["backend"]): Config {
   return {
+    configFile: "/tmp/config.toml",
     stateDir: "/tmp",
     profileDir: "/tmp",
     cookiesFile: "/tmp/c",

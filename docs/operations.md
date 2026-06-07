@@ -42,6 +42,24 @@ Three units in `~/.config/systemd/user/`:
 Remove everything with `ete-look-sync remove-timer` (stops, disables,
 deletes all three units, reloads systemd).
 
+### Custom config + state locations
+
+By default config lives in `~/.config/ete-look-sync/config.toml` and
+state in `~/.local/state/ete-look-sync/`. Override either with an
+environment variable:
+
+| Variable | Overrides |
+|---|---|
+| `ETE_LOOK_SYNC_CONFIG` | Full path to the `config.toml` file. |
+| `ETE_LOOK_SYNC_STATE_DIR` | Directory holding the browser profile, cookies, bearer token, sqlite DB, and Etebase blob. |
+
+A systemd user service starts with a stripped environment, so
+`setup-timer` **pins whatever paths are in effect at setup time** into
+the `.service` unit as `Environment=` lines (the same way it pins the
+absolute bin/node paths). Set the vars in your shell *before* running
+`setup-timer`, and re-run `setup-timer` if you later move the paths.
+Confirm what got baked in with `setup-timer --dry-run`.
+
 ---
 
 ## 2. How a run behaves unattended

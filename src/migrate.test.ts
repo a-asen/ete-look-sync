@@ -18,6 +18,7 @@ function tempDir(prefix: string): string {
 
 function makeCfg(dbFile: string): Config {
   return {
+    configFile: path.join(path.dirname(dbFile), "config.toml"),
     stateDir: path.dirname(dbFile),
     profileDir: "",
     cookiesFile: "",

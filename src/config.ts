@@ -6,6 +6,10 @@
 //   2. ~/.config/ete-look-sync/config.toml (or $ETE_LOOK_SYNC_CONFIG)
 //   3. Built-in defaults
 //
+// Filesystem locations are independently overridable: $ETE_LOOK_SYNC_CONFIG
+// for the TOML file and $ETE_LOOK_SYNC_STATE_DIR for the state directory
+// (else XDG defaults). `setup-timer` pins both into the systemd unit.
+//
 // The TOML file is optional — if absent, env vars and defaults still
 // produce a usable Config.
 
@@ -18,6 +22,7 @@ export type BackendName = "etebase" | "caldav";
 
 export interface Config {
   // --- filesystem paths ------------------------------------------------
+  configFile: string;        // Resolved config.toml path (may not exist on disk)
   stateDir: string;
   profileDir: string;        // Playwright user-data dir
   cookiesFile: string;       // Browser cookies replayed on every API call
@@ -58,7 +63,8 @@ export function calendarUrl(cfg: Config): string {
 }
 
 export function loadConfig(): Config {
-  const toml = loadToml();
+  const configFile = configFilePath();
+  const toml = loadToml(configFile);
   const owaToml = sectionOf(toml, "owa");
   const syncToml = sectionOf(toml, "sync");
   const etebaseToml = sectionOf(toml, "etebase");
@@ -70,6 +76,7 @@ export function loadConfig(): Config {
   fs.mkdirSync(stateDir, { recursive: true });
 
   return {
+    configFile,
     stateDir,
     profileDir: path.join(stateDir, "profile"),
     cookiesFile: path.join(stateDir, "cookies.json"),
@@ -127,10 +134,14 @@ function xdgConfigHome(): string {
   return process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config");
 }
 
-function loadToml(): Record<string, unknown> {
-  const configPath =
+function configFilePath(): string {
+  return (
     process.env["ETE_LOOK_SYNC_CONFIG"] ??
-    path.join(xdgConfigHome(), "ete-look-sync", "config.toml");
+    path.join(xdgConfigHome(), "ete-look-sync", "config.toml")
+  );
+}
+
+function loadToml(configPath: string): Record<string, unknown> {
   if (!fs.existsSync(configPath)) return {};
   const parsed = parseToml(fs.readFileSync(configPath, "utf8"));
   return isPlainObject(parsed) ? parsed : {};

@@ -70,7 +70,15 @@ export async function runSetupTimer(
   }
 
   const nodePath = deps.resolveNodePath();
-  const serviceContent = renderServiceUnit(binPath, nodePath);
+  // Pin the config + state paths that were in effect at setup time, the
+  // same way we pin the absolute bin/node paths above. A systemd user
+  // service starts with a stripped environment, so without this the
+  // timer would always read the default ~/.config / ~/.local/state
+  // locations even when the operator set ETE_LOOK_SYNC_* in their shell.
+  const serviceContent = renderServiceUnit(binPath, nodePath, {
+    ETE_LOOK_SYNC_CONFIG: cfg.configFile,
+    ETE_LOOK_SYNC_STATE_DIR: cfg.stateDir,
+  });
   const timerContent = renderTimerUnit(cfg.intervalMinutes);
   const notifyContent = renderNotifyUnit();
   const dir = deps.systemdUserDir();
@@ -144,11 +152,23 @@ export async function runRemoveTimer(
 
 // ---------- unit rendering (exported for tests) ----------
 
-export function renderServiceUnit(binPath: string, nodePath: string): string {
+export function renderServiceUnit(
+  binPath: string,
+  nodePath: string,
+  env: Record<string, string> = {},
+): string {
   // ExecStart invokes Node directly with the CLI shim as its first
   // argument. Bypasses the shim's `#!/usr/bin/env node` so a
   // stripped-PATH systemd session can't fall back to the system Node
   // (and break a Node-version-bound native dep like better-sqlite3).
+  //
+  // Each Environment= value is double-quoted so a path containing a
+  // space survives systemd's parser. Empty values are skipped so the
+  // unit isn't littered with no-op assignments.
+  const envBlock = Object.entries(env)
+    .filter(([, value]) => value !== "")
+    .map(([key, value]) => `Environment="${key}=${value}"\n`)
+    .join("");
   return `[Unit]
 Description=Outlook calendar → personal calendar sync (one-shot)
 After=network-online.target
@@ -156,7 +176,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${nodePath} ${binPath} sync-once
+${envBlock}ExecStart=${nodePath} ${binPath} sync-once
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ete-look-sync

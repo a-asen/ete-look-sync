@@ -21,6 +21,7 @@ function tempDbPath(): string {
 function makeCfg(overrides: Partial<Config> = {}): Config {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "orch-cfg-"));
   return {
+    configFile: path.join(tmp, "config.toml"),
     stateDir: tmp,
     profileDir: tmp,
     cookiesFile: "",

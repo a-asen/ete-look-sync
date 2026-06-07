@@ -14,9 +14,13 @@ import {
   type TimerDeps,
 } from "./timer.js";
 
-function makeCfg(intervalMinutes = 30): Config {
+function makeCfg(
+  intervalMinutes = 30,
+  paths: { configFile?: string; stateDir?: string } = {},
+): Config {
   return {
-    stateDir: "",
+    configFile: paths.configFile ?? "",
+    stateDir: paths.stateDir ?? "",
     profileDir: "",
     cookiesFile: "",
     bearerFile: "",
@@ -77,6 +81,45 @@ test("renderServiceUnit pins the resolved node + bin paths", () => {
   assert.match(unit, /Type=oneshot/);
   assert.match(unit, /WantedBy=default\.target/);
   assert.match(unit, /After=network-online\.target/);
+});
+
+test("renderServiceUnit pins custom config + state paths as Environment=", () => {
+  const unit = renderServiceUnit("/x", "/node", {
+    ETE_LOOK_SYNC_CONFIG: "/home/u/.helper/private/ete-look-sync/config.toml",
+    ETE_LOOK_SYNC_STATE_DIR: "/home/u/.helper/private/ete-look-sync/state",
+  });
+  assert.match(
+    unit,
+    /Environment="ETE_LOOK_SYNC_CONFIG=\/home\/u\/\.helper\/private\/ete-look-sync\/config\.toml"/,
+  );
+  assert.match(
+    unit,
+    /Environment="ETE_LOOK_SYNC_STATE_DIR=\/home\/u\/\.helper\/private\/ete-look-sync\/state"/,
+  );
+});
+
+test("renderServiceUnit omits Environment= lines for empty values", () => {
+  const unit = renderServiceUnit("/x", "/node", {
+    ETE_LOOK_SYNC_CONFIG: "",
+    ETE_LOOK_SYNC_STATE_DIR: "",
+  });
+  assert.doesNotMatch(unit, /Environment=/);
+});
+
+test("runSetupTimer bakes the cfg's config + state paths into the service unit", async () => {
+  const systemdDir = fs.mkdtempSync(path.join(os.tmpdir(), "timer-env-"));
+  const { deps } = makeDeps({ systemdDir });
+  const cfg = makeCfg(30, {
+    configFile: "/custom/ete-look-sync/config.toml",
+    stateDir: "/custom/ete-look-sync/state",
+  });
+
+  const code = await runSetupTimer(cfg, {}, deps);
+  assert.equal(code, 0);
+
+  const service = fs.readFileSync(path.join(systemdDir, "ete-look-sync.service"), "utf8");
+  assert.match(service, /Environment="ETE_LOOK_SYNC_CONFIG=\/custom\/ete-look-sync\/config\.toml"/);
+  assert.match(service, /Environment="ETE_LOOK_SYNC_STATE_DIR=\/custom\/ete-look-sync\/state"/);
 });
 
 test("renderServiceUnit wires OnFailure to the notify unit", () => {
