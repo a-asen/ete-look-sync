@@ -4,8 +4,10 @@
 // lists collections, asks the user to pick one, then writes:
 //
 //   - the saved Account blob to cfg.etebaseBlobFile (mode 600)
-//   - the chosen collection UID to stdout, with a single-line hint
-//     about adding it to ~/.config/ete-look-sync/config.toml
+//   - server_url / username / collection_uid into the [etebase] section
+//     of cfg.configFile (comment-preserving), so the choice takes effect
+//     with no manual paste. Falls back to printing the snippet if the
+//     config can't be written.
 //
 // The blob is the only place encryption keys are persisted; chmod 600
 // keeps it readable by the user only. Persisting the collection UID
@@ -18,6 +20,7 @@ import * as readline from "node:readline/promises";
 import { Account, ready as etebaseReady } from "etebase";
 
 import type { Config } from "./config.js";
+import { writeEtebaseConfig } from "./config_write.js";
 
 export async function runEtebaseLogin(cfg: Config): Promise<number> {
   await etebaseReady;
@@ -107,14 +110,25 @@ export async function runEtebaseLogin(cfg: Config): Promise<number> {
     const blob = await account.save();
     await fsp.writeFile(cfg.etebaseBlobFile, blob, { mode: 0o600 });
     process.stdout.write(`\n[login-etebase] saved account blob to ${cfg.etebaseBlobFile} (mode 600)\n`);
-    process.stdout.write(`[login-etebase] collection UID: ${collectionUid}\n\n`);
-    process.stdout.write(
-      "Add this to ~/.config/ete-look-sync/config.toml:\n\n" +
-        "[etebase]\n" +
-        `server_url     = "${serverUrl}"\n` +
-        `username       = "${username}"\n` +
-        `collection_uid = "${collectionUid}"\n`,
-    );
+    process.stdout.write(`[login-etebase] collection UID: ${collectionUid}\n`);
+
+    const etebaseValues = { server_url: serverUrl, username, collection_uid: collectionUid };
+    try {
+      await writeEtebaseConfig(cfg.configFile, etebaseValues);
+      process.stdout.write(
+        `[login-etebase] wrote [etebase] server_url/username/collection_uid to ${cfg.configFile}\n`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `[login-etebase] could not update ${cfg.configFile}: ${msg}\n\n` +
+          "Add this to your config.toml manually:\n\n" +
+          "[etebase]\n" +
+          `server_url     = "${serverUrl}"\n` +
+          `username       = "${username}"\n` +
+          `collection_uid = "${collectionUid}"\n`,
+      );
+    }
     return 0;
   } finally {
     rl.close();
