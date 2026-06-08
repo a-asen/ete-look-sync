@@ -110,7 +110,7 @@ function veventLines(event: Event, opts: RenderOptions): string[] {
 // trailing Z or naive ("2026-05-13T08:00:00" — interpreted as UTC
 // because our request set TimeZoneContext=UTC). Both parse here
 // without branching downstream.
-function parseIsoToDate(iso: string): Date {
+export function parseIsoToDate(iso: string): Date {
   const trimmed = iso.endsWith("Z") ? iso.slice(0, -1) : iso;
   const noFraction = trimmed.split(".")[0]!;
   const d = new Date(noFraction + "Z");
@@ -129,13 +129,13 @@ function tryParseIsoToDate(iso: string): Date | null {
   }
 }
 
-function formatDateTimeUtc(d: Date): string {
+export function formatDateTimeUtc(d: Date): string {
   // toISOString() → "2026-05-13T08:00:00.000Z"
   // → strip "-", ":", and the ".sss" fraction → "20260513T080000Z"
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-function formatDateCompact(iso: string): string {
+export function formatDateCompact(iso: string): string {
   const datePart = iso.split("T")[0] ?? "";
   return datePart.replace(/-/g, "");
 }

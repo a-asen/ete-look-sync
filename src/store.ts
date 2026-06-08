@@ -210,6 +210,20 @@ export class Store {
       );
   }
 
+  /**
+   * Repoint every row pointing at `oldRemoteId` to `newRemoteId`,
+   * clearing the etag so the next update re-fetches the live revision.
+   * Used by `dedupe` after deleting a duplicate so the surviving remote
+   * item inherits the local mapping (a later edit then updates it in
+   * place instead of creating a fresh copy). Returns rows changed.
+   */
+  repointRemoteId(oldRemoteId: string, newRemoteId: string): number {
+    const info = this.db
+      .prepare("UPDATE events SET remote_id = ?, remote_etag = '' WHERE remote_id = ?")
+      .run(newRemoteId, oldRemoteId);
+    return Number(info.changes);
+  }
+
   /** Record a push failure so fix-errors can target this event. */
   markFailed(itemId: string, error: string): void {
     this.db

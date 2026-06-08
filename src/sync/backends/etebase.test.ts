@@ -105,6 +105,9 @@ function makeFakeOps(initial: Array<{ uid: string; content: string }> = [], conf
       store.deletes.push(args);
       store.items.delete(args.uid);
     },
+    async listAll() {
+      return [...store.items.values()].map((i) => ({ uid: i.uid, content: i.content }));
+    },
   };
   return { ops, store };
 }

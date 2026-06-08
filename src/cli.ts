@@ -10,6 +10,7 @@
 //   probe            Verify the saved session by reading 7 days of events
 //   sync-once        One fetch + diff + push cycle against the configured backend
 //   fix-errors       Re-push events that failed previously, from local data
+//   dedupe           Remove duplicate copies of synced events (dry-run by default)
 //   export-ics       Dump all stored events to a single .ics backup file
 //   diagnose         (not ported) Record raw API traffic for debugging
 //   setup-timer      Install a systemd user timer for unattended periodic sync
@@ -29,6 +30,7 @@ import { setupLogging } from "./log.js";
 import { migrateLegacy } from "./migrate.js";
 import { runProbe } from "./probe.js";
 import { Store } from "./store.js";
+import { runDedupe } from "./sync/dedupe.js";
 import { renderAllEvents } from "./sync/ics.js";
 import { runFixErrors, runSyncOnce } from "./sync/orchestrator.js";
 import { runRemoveTimer, runSetupTimer } from "./timer.js";
@@ -144,6 +146,15 @@ async function main(argv: readonly string[]): Promise<number> {
     .description("Stop, disable, and delete the installed systemd units.")
     .action(async () => {
       const code = await runRemoveTimer();
+      process.exit(code);
+    });
+
+  program
+    .command("dedupe")
+    .description("Remove duplicate copies of synced events from the calendar. Dry-run by default.")
+    .option("--force", "Actually delete the duplicates; without this it just lists them.")
+    .action(async (opts: { force?: boolean }) => {
+      const code = await runDedupe(loadConfig(), opts.force ? { force: true } : {});
       process.exit(code);
     });
 

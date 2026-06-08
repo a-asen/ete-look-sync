@@ -21,6 +21,14 @@ export interface PushResult {
   remoteEtag: string;
 }
 
+/** One existing remote resource, with its raw ICS for signature matching. */
+export interface RemoteItem {
+  /** Same opaque handle as PushResult.remoteId (used to delete/update it). */
+  remoteId: string;
+  /** The item's calendar object (a single-VEVENT VCALENDAR string). */
+  content: string;
+}
+
 export interface UpsertOptions {
   /**
    * `remoteId` returned by a previous successful push for this event.
@@ -60,6 +68,14 @@ export interface Backend {
    * as failed (no partial commits leaking out).
    */
   upsertMany?(events: readonly Event[]): Promise<PushResult[]>;
+
+  /**
+   * Optional: enumerate every live resource in the collection, each with
+   * its raw ICS. Used for remote-aware dedup (skip creating an event that
+   * already exists) and the `dedupe` command. Backends that can't list
+   * cheaply leave it undefined; callers degrade to local-store dedup only.
+   */
+  listItems?(): Promise<RemoteItem[]>;
 
   /**
    * Delete the remote resource identified by `remoteId`.

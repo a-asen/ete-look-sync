@@ -16,6 +16,7 @@ import {
   Account,
   type Collection,
   type ItemManager,
+  OutputFormat,
   ready as etebaseReady,
 } from "etebase";
 
@@ -27,6 +28,7 @@ import {
   type Backend,
   BackendConfigError,
   type PushResult,
+  type RemoteItem,
   type UpsertOptions,
 } from "../backend.js";
 
@@ -68,6 +70,8 @@ export interface EtebaseOps {
   }): Promise<EtebaseItemSnapshot>;
   /** Mark the item as deleted and upload that revision. */
   deleteItem(args: { uid: string; etag: string }): Promise<void>;
+  /** Enumerate every live item with its decrypted content. */
+  listAll(): Promise<Array<{ uid: string; content: string }>>;
 }
 
 export class EtebaseBackend implements Backend {
@@ -151,6 +155,11 @@ export class EtebaseBackend implements Backend {
     return created.map((snap) => ({ remoteId: snap.uid, remoteEtag: snap.etag }));
   }
 
+  async listItems(): Promise<RemoteItem[]> {
+    const all = await this.ops.listAll();
+    return all.map((i) => ({ remoteId: i.uid, content: i.content }));
+  }
+
   async delete(remoteId: string): Promise<void> {
     let existing: EtebaseItemSnapshot | null;
     try {
@@ -226,6 +235,23 @@ function makeSdkOps(itemManager: ItemManager): EtebaseOps {
       const item = await itemManager.fetch(uid);
       item.delete();
       await itemManager.batch([item]);
+    },
+    async listAll() {
+      // Page through the whole collection with the list stoken; decrypt
+      // each live item's content to a string for signature parsing.
+      const out: Array<{ uid: string; content: string }> = [];
+      let stoken: string | undefined;
+      for (;;) {
+        const page = await itemManager.list(stoken ? { stoken, limit: 500 } : { limit: 500 });
+        for (const item of page.data) {
+          if (item.isDeleted) continue;
+          const content = await item.getContent(OutputFormat.String);
+          out.push({ uid: item.uid, content });
+        }
+        stoken = page.stoken;
+        if (page.done) break;
+      }
+      return out;
     },
   };
 }

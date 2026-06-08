@@ -14,6 +14,7 @@ import type { Event } from "../models.js";
 import { Store, type StoredRow } from "../store.js";
 import { type Backend, BackendConfigError, openBackend } from "./backend.js";
 import { computeDiff, type Diff, PAST_GRACE_DAYS } from "./differ.js";
+import { eventSignature, icsSignature } from "./signature.js";
 
 const log = getLogger("orchestrator");
 
@@ -26,6 +27,8 @@ export interface SyncSummary {
   unchanged: number;
   frozenPast: number;
   outOfWindow: number;
+  /** Creates skipped because a matching event already exists remotely. */
+  alreadyPresent: number;
   pushedCreates: number;
   pushedUpdates: number;
   pushedDeletes: number;
@@ -174,6 +177,7 @@ export async function runSyncOnceWith(
       }
 
       try {
+        await reconcileCreatesWithRemote(diff, store, backend, cfg, summary);
         await executePlan(diff, store, backend, summary);
       } finally {
         await backend.close();
@@ -289,6 +293,67 @@ export async function runFixErrorsWith(
 // supports bulk inserts. Etebase's batch endpoint timed out (504) on
 // very large batches in practice; 50 has proven reliable.
 const CREATE_BATCH_SIZE = 50;
+
+/**
+ * Drop creates whose event already exists on the remote calendar.
+ *
+ * The differ only knows the local store, so a wiped/relocated store — or
+ * a push that committed server-side but reported failure — would re-create
+ * everything. Here we match each pending create against what's actually in
+ * the collection by content signature (name + duration). A hit means the
+ * event is already there: we "adopt" it into the store (record it pointing
+ * at the existing remote item) instead of pushing a duplicate.
+ *
+ * No-op when the backend can't list or there's nothing to create.
+ */
+async function reconcileCreatesWithRemote(
+  diff: Diff,
+  store: Store,
+  backend: Backend,
+  cfg: Config,
+  summary: SyncSummary,
+): Promise<void> {
+  if (!backend.listItems || diff.creates.length === 0) return;
+
+  let remoteItems;
+  try {
+    remoteItems = await backend.listItems();
+  } catch (err) {
+    // Listing is an optimisation against duplicates, not a correctness
+    // requirement for the push itself — log and fall back to store dedup.
+    log.warn(`[sync] remote listing failed, skipping remote dedup: ${describeError(err)}`);
+    return;
+  }
+
+  const sigToRemoteId = new Map<string, string>();
+  for (const item of remoteItems) {
+    const sig = icsSignature(item.content).signature;
+    if (sig && !sigToRemoteId.has(sig)) sigToRemoteId.set(sig, item.remoteId);
+  }
+
+  const stillToCreate: Event[] = [];
+  for (const event of diff.creates) {
+    const remoteId = sigToRemoteId.get(eventSignature(event));
+    if (remoteId === undefined) {
+      stillToCreate.push(event);
+      continue;
+    }
+    // Already on the calendar — adopt it so future runs track it instead
+    // of duplicating. We don't know the live etag; markPushed records an
+    // empty one and the next content change re-fetches it before update.
+    store.upsert(event);
+    store.markPushed(event.itemId, { remoteId, remoteEtag: "", backend: cfg.backend });
+    summary.alreadyPresent++;
+  }
+
+  if (summary.alreadyPresent > 0) {
+    log.info(
+      `[sync] ${summary.alreadyPresent} create(s) already on the calendar — adopted, not duplicated`,
+    );
+  }
+  diff.creates = stillToCreate;
+  summary.creates = stillToCreate.length;
+}
 
 async function executePlan(
   diff: Diff,
@@ -458,6 +523,7 @@ function makeSummary(): SyncSummary {
     unchanged: 0,
     frozenPast: 0,
     outOfWindow: 0,
+    alreadyPresent: 0,
     pushedCreates: 0,
     pushedUpdates: 0,
     pushedDeletes: 0,
