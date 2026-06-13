@@ -16,7 +16,7 @@
 // it to match would reintroduce duplicates.
 
 import { type Event } from "../models.js";
-import { formatDateCompact, formatDateTimeUtc, parseIsoToDate } from "./ics.js";
+import { formatAllDayDate, formatDateTimeUtc, parseIsoToDate } from "./ics.js";
 
 // Field delimiter for the joined "name start end" key. A plain space is
 // safe: the start/end fields are fixed-shape timestamps with no spaces,
@@ -31,10 +31,10 @@ export const TOOL_UID_SUFFIX = "@ete-look-sync";
 export function eventSignature(event: Event): string {
   const name = normalizeName(event.subject || "(no subject)");
   const start = event.isAllDay
-    ? formatDateCompact(event.startIso)
+    ? formatAllDayDate(event.startIso)
     : formatDateTimeUtc(parseIsoToDate(event.startIso));
   const end = event.isAllDay
-    ? formatDateCompact(event.endIso)
+    ? formatAllDayDate(event.endIso)
     : formatDateTimeUtc(parseIsoToDate(event.endIso));
   return `${name}${SEP}${start}${SEP}${end}`;
 }

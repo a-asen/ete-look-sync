@@ -84,6 +84,24 @@ test("All-day event uses VALUE=DATE form", () => {
   assert.ok(ls.includes("DTEND;VALUE=DATE:20260514"));
 });
 
+test("All-day event keeps the user's day when Exchange returns it as local-midnight-in-UTC", () => {
+  // Real Exchange shape for a UTC+2 (Oslo summer) mailbox: a one-day
+  // all-day event on June 24 comes back as 22:00Z the previous day.
+  // Stripping the time would render June 23 — the noon anchor must keep
+  // it on June 24, with the exclusive DTEND on June 25.
+  const out = renderEvent(
+    makeEvent({
+      isAllDay: true,
+      startIso: "2026-06-23T22:00:00Z",
+      endIso: "2026-06-24T22:00:00Z",
+    }),
+    { now: FIXED_DTSTAMP },
+  );
+  const ls = lines(out);
+  assert.ok(ls.includes("DTSTART;VALUE=DATE:20260624"), ls.join("\n"));
+  assert.ok(ls.includes("DTEND;VALUE=DATE:20260625"), ls.join("\n"));
+});
+
 test("Parses fractional-second and bare ISO formats", () => {
   // Exchange has been seen to emit both forms; the renderer should
   // accept either without complaint.

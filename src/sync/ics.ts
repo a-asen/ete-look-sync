@@ -65,8 +65,8 @@ function veventLines(event: Event, opts: RenderOptions): string[] {
   out.push(`SUMMARY:${escapeText(event.subject || "(no subject)")}`);
 
   if (event.isAllDay) {
-    out.push(`DTSTART;VALUE=DATE:${formatDateCompact(event.startIso)}`);
-    out.push(`DTEND;VALUE=DATE:${formatDateCompact(event.endIso)}`);
+    out.push(`DTSTART;VALUE=DATE:${formatAllDayDate(event.startIso)}`);
+    out.push(`DTEND;VALUE=DATE:${formatAllDayDate(event.endIso)}`);
   } else {
     out.push(`DTSTART:${formatDateTimeUtc(parseIsoToDate(event.startIso))}`);
     out.push(`DTEND:${formatDateTimeUtc(parseIsoToDate(event.endIso))}`);
@@ -135,9 +135,16 @@ export function formatDateTimeUtc(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-export function formatDateCompact(iso: string): string {
-  const datePart = iso.split("T")[0] ?? "";
-  return datePart.replace(/-/g, "");
+// All-day events arrive from Exchange as local midnight converted to UTC
+// (e.g. 22:00Z the previous day for a UTC+2 mailbox), so the raw UTC date
+// is the day BEFORE the one the user picked. Anchor at local noon instead:
+// shifting the instant +12h lands inside the intended calendar day for any
+// timezone offset in (−12h, +12h) — every inhabited zone — then take the
+// UTC date. A value already at midnight UTC (offset 0, or a synthetic test
+// input) is unaffected.
+export function formatAllDayDate(iso: string): string {
+  const noon = new Date(parseIsoToDate(iso).getTime() + 12 * 60 * 60 * 1000);
+  return noon.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
 // ---------- RFC 5545 escaping & folding ----------
