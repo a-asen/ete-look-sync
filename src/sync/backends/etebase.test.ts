@@ -205,32 +205,11 @@ test("delete swallows delete-step errors too", async () => {
 
 // ---------- close ----------
 
-test("close calls account.logout() if available", async () => {
-  let loggedOut = false;
-  const account = {
-    logout: async () => {
-      loggedOut = true;
-    },
-  };
-  const { ops } = makeFakeOps();
-  const backend = new EtebaseBackend(ops, account);
-  await backend.close();
-  assert.equal(loggedOut, true);
-});
-
-test("close swallows logout errors", async () => {
-  const account = {
-    logout: async () => {
-      throw new Error("network down");
-    },
-  };
-  const { ops } = makeFakeOps();
-  const backend = new EtebaseBackend(ops, account);
-  await backend.close(); // does not throw
-});
-
-test("close works when no account is attached (test-injection case)", async () => {
+test("close is a no-op and does NOT log out (would poison the persisted token)", async () => {
+  // Regression guard: close() must never invalidate the saved account's
+  // token, or the next run fails with "Invalid token". The backend keeps
+  // no account handle at all now; close() just returns.
   const { ops } = makeFakeOps();
   const backend = new EtebaseBackend(ops);
-  await backend.close(); // does not throw
+  assert.doesNotThrow(() => backend.close());
 });

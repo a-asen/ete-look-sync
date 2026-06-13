@@ -75,10 +75,7 @@ export interface EtebaseOps {
 }
 
 export class EtebaseBackend implements Backend {
-  constructor(
-    private readonly ops: EtebaseOps,
-    private readonly account: { logout?: () => Promise<void> } | null = null,
-  ) {}
+  constructor(private readonly ops: EtebaseOps) {}
 
   /** Build an SDK-backed EtebaseBackend from a Config. */
   static async open(cfg: Config): Promise<EtebaseBackend> {
@@ -110,7 +107,7 @@ export class EtebaseBackend implements Backend {
       );
     }
     const itemManager = colManager.getItemManager(collection);
-    return new EtebaseBackend(makeSdkOps(itemManager), account);
+    return new EtebaseBackend(makeSdkOps(itemManager));
   }
 
   async upsert(event: Event, opts: UpsertOptions = {}): Promise<PushResult> {
@@ -177,18 +174,14 @@ export class EtebaseBackend implements Backend {
     }
   }
 
-  async close(): Promise<void> {
-    // Best-effort logout: invalidates the auth token server-side. If
-    // we're offline (or the saved account already expired) this is a
-    // no-op, but we shouldn't raise out of close.
-    if (this.account?.logout) {
-      try {
-        await this.account.logout();
-      } catch {
-        // intentionally swallowed
-      }
-    }
-  }
+  // No-op: the Etebase SDK holds no socket/handle to release (every call
+  // is a stateless HTTPS request), and the saved account blob reuses one
+  // long-lived token across runs. Calling account.logout() here would
+  // invalidate that token server-side, poisoning the persisted blob so
+  // the *next* sync fails with "Invalid token" — the opposite of what a
+  // persist-and-replay session wants. So teardown deliberately does
+  // nothing; the next run restores the same valid token from disk.
+  close(): void {}
 }
 
 // ---------- SDK binding ----------
