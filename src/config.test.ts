@@ -57,6 +57,16 @@ test("loadConfig: defaults when nothing is set", () => {
     assert.equal(cfg.intervalMinutes, 30);
     assert.equal(cfg.etebaseServerUrl, "https://api.etebase.com");
     assert.equal(cfg.caldavUrl, "");
+    assert.equal(cfg.mirrorForeign, false);
+  });
+});
+
+test("loadConfig: mirror_foreign is off by default and env-overridable", () => {
+  withIsolatedEnv({ ETE_LOOK_SYNC_MIRROR_FOREIGN: "true" }, () => {
+    assert.equal(loadConfig().mirrorForeign, true);
+  });
+  withIsolatedEnv({ ETE_LOOK_SYNC_MIRROR_FOREIGN: "no" }, () => {
+    assert.equal(loadConfig().mirrorForeign, false);
   });
 });
 

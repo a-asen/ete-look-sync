@@ -12,8 +12,9 @@ import { fetchCalendarView, FetchError } from "../fetch/owa.js";
 import { getLogger } from "../log.js";
 import type { Event } from "../models.js";
 import { Store, type StoredRow } from "../store.js";
-import { type Backend, BackendConfigError, openBackend } from "./backend.js";
+import { type Backend, BackendConfigError, openBackend, type RemoteItem } from "./backend.js";
 import { computeDiff, type Diff, PAST_GRACE_DAYS } from "./differ.js";
+import { planForeignDeletes } from "./prune.js";
 import { eventSignature, icsSignature } from "./signature.js";
 
 const log = getLogger("orchestrator");
@@ -126,7 +127,9 @@ export async function runSyncOnceWith(
     try {
       const cutoff = opts.noFreezePast
         ? new Date(0)
-        : new Date(today.getTime() - (cfg.freezePastDays || PAST_GRACE_DAYS) * 86400_000);
+        : cfg.mirrorForeign
+          ? fetchStart // mirror: the window IS the freeze (nothing extra frozen)
+          : new Date(today.getTime() - (cfg.freezePastDays || PAST_GRACE_DAYS) * 86400_000);
       const diff = computeDiff(events, store.iterRows(), {
         fetchStart,
         fetchEnd,
@@ -158,6 +161,7 @@ export async function runSyncOnceWith(
       }
 
       if (opts.dryRun) {
+        if (cfg.mirrorForeign) await previewMirrorPrune(diff, store, deps, cfg, events, fetchStart, fetchEnd, summary, !!opts.allowEmptyFetch);
         printDryRunPlan(diff);
         store.rollback();
         summary.elapsedSec = (Date.now() - started) / 1000;
@@ -178,6 +182,9 @@ export async function runSyncOnceWith(
 
       try {
         await reconcileCreatesWithRemote(diff, store, backend, cfg, summary);
+        if (cfg.mirrorForeign) {
+          await pruneForeignItems(diff, store, backend, events, fetchStart, fetchEnd, summary, !!opts.allowEmptyFetch);
+        }
         await executePlan(diff, store, backend, summary);
       } finally {
         await backend.close();
@@ -355,6 +362,98 @@ async function reconcileCreatesWithRemote(
   summary.creates = stillToCreate.length;
 }
 
+/**
+ * Delete remote items the source-of-truth mirror no longer contains.
+ * See prune.ts for the matching rules. No-op when the backend can't list
+ * items (e.g. a CalDAV backend without listing support).
+ */
+async function pruneForeignItems(
+  diff: Diff,
+  store: Store,
+  backend: Backend,
+  events: readonly Event[],
+  fetchStart: Date,
+  fetchEnd: Date,
+  summary: SyncSummary,
+  allowEmptyFetch: boolean,
+): Promise<void> {
+  if (!backend.listItems) {
+    log.warn("[sync] mirror_foreign enabled but the backend can't list items — skipping mirror prune");
+    return;
+  }
+  // With an empty fetch every in-window item would look orphaned — that
+  // is almost always a failed/oversized window, not a genuinely empty
+  // calendar. Refuse unless explicitly forced.
+  if (events.length === 0 && !allowEmptyFetch) {
+    log.error(
+      "[sync] mirror prune skipped: fetch returned 0 events — looks like a rejected window, " +
+        "not an empty calendar (pass --allow-empty-fetch to override)",
+    );
+    return;
+  }
+
+  let remoteItems: RemoteItem[];
+  try {
+    remoteItems = await backend.listItems();
+  } catch (err) {
+    log.warn(`[sync] remote listing failed, skipping mirror prune: ${describeError(err)}`);
+    return;
+  }
+
+  const freshIds = new Set(events.map((e) => e.itemId));
+  const claimedRemoteIds = new Set<string>();
+  for (const row of store.iterRows()) {
+    if (row.remoteId && freshIds.has(row.itemId)) claimedRemoteIds.add(row.remoteId);
+  }
+  const alreadyDeleting = new Set<string>();
+  for (const row of diff.deletes) if (row.remoteId) alreadyDeleting.add(row.remoteId);
+  const sourceSignatures = new Set(events.map((e) => eventSignature(e)));
+
+  diff.foreignDeletes = planForeignDeletes({
+    remoteItems: remoteItems.map((i) => ({ remoteId: i.remoteId, content: i.content })),
+    claimedRemoteIds,
+    alreadyDeleting,
+    sourceSignatures,
+    windowStart: date8(fetchStart),
+    windowEnd: date8(fetchEnd),
+  });
+  summary.deletes += diff.foreignDeletes.length;
+  if (diff.foreignDeletes.length > 0) {
+    log.info(
+      `[sync] mirror: ${diff.foreignDeletes.length} item(s) not in the source calendar — scheduled for deletion`,
+    );
+  }
+}
+
+/** Dry-run mirror preview: list remote items and fill diff.foreignDeletes (no writes). */
+async function previewMirrorPrune(
+  diff: Diff,
+  store: Store,
+  deps: SyncDeps,
+  cfg: Config,
+  events: readonly Event[],
+  fetchStart: Date,
+  fetchEnd: Date,
+  summary: SyncSummary,
+  allowEmptyFetch: boolean,
+): Promise<void> {
+  let backend: Backend;
+  try {
+    backend = await deps.openBackend(cfg);
+  } catch (err) {
+    if (err instanceof BackendConfigError) {
+      log.warn(`[sync] dry-run mirror preview skipped: ${err.message}`);
+      return;
+    }
+    throw err;
+  }
+  try {
+    await pruneForeignItems(diff, store, backend, events, fetchStart, fetchEnd, summary, allowEmptyFetch);
+  } finally {
+    await backend.close();
+  }
+}
+
 async function executePlan(
   diff: Diff,
   store: Store,
@@ -456,6 +555,18 @@ async function executePlan(
     }
   }
 
+  for (const fd of diff.foreignDeletes) {
+    try {
+      await backend.delete(fd.remoteId);
+      summary.pushedDeletes++;
+      log.info(`[sync] deleted foreign  ${fd.startDate}  ${fd.subject}`);
+    } catch (err) {
+      const msg = `delete(foreign) ${fd.subject}: ${describeError(err)}`;
+      summary.errors.push(msg);
+      log.error(`[sync] ${msg}`);
+    }
+  }
+
   for (const itemId of diff.unchanged) {
     store.touchSeen(itemId);
   }
@@ -491,7 +602,16 @@ function printDryRunPlan(diff: Diff): void {
       process.stdout.write(`  … and ${diff.deletes.length - limit} more\n`);
     }
   }
-  if (!(diff.creates.length || diff.updates.length || diff.deletes.length)) {
+  if (diff.foreignDeletes.length) {
+    process.stdout.write("[sync] would delete (mirror — not in source):\n");
+    for (const fd of diff.foreignDeletes.slice(0, limit)) {
+      process.stdout.write(`  - ${fd.startDate}  ${fd.subject}\n`);
+    }
+    if (diff.foreignDeletes.length > limit) {
+      process.stdout.write(`  … and ${diff.foreignDeletes.length - limit} more\n`);
+    }
+  }
+  if (!(diff.creates.length || diff.updates.length || diff.deletes.length || diff.foreignDeletes.length)) {
     process.stdout.write("[sync] nothing to do\n");
   }
   process.stdout.write("[sync] DRY RUN — no backend writes performed\n");
@@ -551,4 +671,9 @@ function startOfUtcDay(dt: Date): Date {
 
 function dateOnly(dt: Date): string {
   return dt.toISOString().slice(0, 10);
+}
+
+/** "YYYYMMDD" — the shape signature.startDate uses, for window comparison. */
+function date8(dt: Date): string {
+  return dt.toISOString().slice(0, 10).replace(/-/g, "");
 }

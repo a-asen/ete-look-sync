@@ -44,6 +44,10 @@ export interface IcsSignature {
   signature: string | null;
   /** True when the UID carries the tool's suffix — i.e. we created it. */
   isToolItem: boolean;
+  /** Decoded SUMMARY, or null when absent. Used for prune logging. */
+  summary: string | null;
+  /** Start date as "YYYYMMDD" (UTC for timed, literal for all-day), or null. */
+  startDate: string | null;
 }
 
 /** Parse UID + name+start+end signature out of a single-VEVENT ICS. */
@@ -63,6 +67,8 @@ export function icsSignature(content: string): IcsSignature {
     uid,
     signature,
     isToolItem: uid !== null && uid.endsWith(TOOL_UID_SUFFIX),
+    summary: summary ? unescapeText(summary.value) : null,
+    startDate: dtstart ? normalizeIcsTime(dtstart).slice(0, 8) : null,
   };
 }
 

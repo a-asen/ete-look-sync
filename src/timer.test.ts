@@ -39,6 +39,7 @@ function makeCfg(
     daysForward: 30,
     freezePastDays: 2,
     intervalMinutes,
+    mirrorForeign: false,
   };
 }
 

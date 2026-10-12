@@ -41,6 +41,7 @@ function makeCfg(overrides: Partial<Config> = {}): Config {
     daysForward: 30,
     freezePastDays: 2,
     intervalMinutes: 30,
+    mirrorForeign: false,
     ...overrides,
   };
 }
@@ -117,6 +118,41 @@ class FakeBatchBackend implements Backend {
     this.deletes.push(remoteId);
   }
 
+  close(): void {
+    this.closed = true;
+  }
+}
+
+/** Minimal single-VEVENT ICS for mirror-prune tests. */
+function ics(uid: string, summary: string, dtstart: string, dtend: string): string {
+  return [
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `SUMMARY:${summary}`,
+    `DTSTART:${dtstart}`,
+    `DTEND:${dtend}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+/** Backend that can list pre-seeded remote items (for mirror_foreign). */
+class MirrorBackend implements Backend {
+  pushes: string[] = [];
+  deletes: string[] = [];
+  closed = false;
+  constructor(private readonly items: Array<{ remoteId: string; content: string }>) {}
+  async upsert(event: Event): Promise<PushResult> {
+    this.pushes.push(event.itemId);
+    return { remoteId: `rid-${event.itemId}`, remoteEtag: "e" };
+  }
+  async delete(remoteId: string): Promise<void> {
+    this.deletes.push(remoteId);
+  }
+  async listItems(): Promise<Array<{ remoteId: string; etag: string; content: string }>> {
+    return this.items.map((i) => ({ ...i, etag: "e" }));
+  }
   close(): void {
     this.closed = true;
   }
@@ -211,6 +247,44 @@ test("runSyncOnce deletes stored events that vanished upstream", async () => {
   }));
   assert.equal(summary.pushedDeletes, 1);
   assert.deepEqual(backend.deletes, ["rid-e1"]);
+});
+
+// ---------- mirror_foreign ----------
+
+test("runSyncOnce mirror_foreign deletes in-window items absent from the source", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath(), mirrorForeign: true });
+  const source = makeEvent("e1", "2026-05-15T10:00:00Z", "Live");
+  const live = ics("es-live", "Live", "20260515T100000Z", "20260515T100000Z");
+  const stale = ics("es-stale", "Stale", "20260516T100000Z", "20260516T100000Z");
+  const backend = new MirrorBackend([
+    { remoteId: "live-remote", content: live },
+    { remoteId: "stale-remote", content: stale },
+  ]);
+
+  const summary = await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => [source],
+    openBackend: async () => backend,
+  }));
+
+  assert.equal(summary.errors.length, 0);
+  // The live foreign item is adopted (matched by signature) — nothing created.
+  assert.deepEqual(backend.pushes, []);
+  // Only the stale item is deleted; the adopted live one survives.
+  assert.deepEqual(backend.deletes, ["stale-remote"]);
+  assert.equal(summary.pushedDeletes, 1);
+});
+
+test("runSyncOnce without mirror_foreign leaves foreign items untouched", async () => {
+  const cfg = makeCfg({ dbFile: tempDbPath() });
+  const stale = ics("es-stale", "Stale", "20260516T100000Z", "20260516T100000Z");
+  const backend = new MirrorBackend([{ remoteId: "stale-remote", content: stale }]);
+
+  await runSyncOnceWith(cfg, {}, depsWith({
+    fetchEvents: async () => [makeEvent("e1", "2026-05-15T10:00:00Z", "Live")],
+    openBackend: async () => backend,
+  }));
+
+  assert.deepEqual(backend.deletes, []);
 });
 
 // ---------- safety check ----------

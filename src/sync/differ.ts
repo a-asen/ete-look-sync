@@ -20,6 +20,7 @@
 
 import { contentHash, type Event } from "../models.js";
 import type { StoredRow } from "../store.js";
+import type { ForeignDelete } from "./prune.js";
 
 // How many days of past events we keep eligible for update/delete.
 // Beyond this all changes are absorbed silently — the user explicitly
@@ -30,6 +31,12 @@ export interface Diff {
   creates: Event[];
   updates: Array<{ event: Event; row: StoredRow }>;
   deletes: StoredRow[];
+  /**
+   * Remote items (not tracked by the store) to delete under the
+   * source-of-truth mirror. Empty unless `mirror_foreign` is enabled;
+   * populated by the orchestrator's prune pass, not by computeDiff.
+   */
+  foreignDeletes: ForeignDelete[];
   unchanged: string[];
   /** Counter for events whose start is before the cutoff. Logging only. */
   frozenPast: number;
@@ -114,7 +121,7 @@ export function computeDiff(
     deletes.push(row);
   }
 
-  return { creates, updates, deletes, unchanged, frozenPast, outOfWindow };
+  return { creates, updates, deletes, foreignDeletes: [], unchanged, frozenPast, outOfWindow };
 }
 
 // ---------- internals ----------

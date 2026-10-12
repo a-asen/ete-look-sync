@@ -35,6 +35,7 @@ function cfg(backend: Config["backend"]): Config {
     daysForward: 0,
     freezePastDays: 0,
     intervalMinutes: 0,
+    mirrorForeign: false,
   };
 }
 

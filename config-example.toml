@@ -50,6 +50,19 @@ freeze_past_days = 2
 # Env: ETE_LOOK_SYNC_INTERVAL_MINUTES
 interval_minutes = 30
 
+# Source-of-truth mirror. When true, the managed window
+# (days_back past .. days_forward future) is reconciled against the
+# remote calendar by CONTENT, not by creator: any item in that window
+# that no longer matches a fetched Outlook event is deleted, whatever
+# created it, and items that DO match are adopted (so future edits
+# update in place). Use this when the remote calendar should be a
+# strict mirror of the source rather than "only what this tool wrote".
+# Note: this DELETES foreign/manual entries in the window; and the
+# window itself is the freeze (freeze_past_days is ignored while on).
+# Off by default.
+# Env: ETE_LOOK_SYNC_MIRROR_FOREIGN
+mirror_foreign = false
+
 # ---------------------------------------------------------------------
 # Etebase backend (default)
 # ---------------------------------------------------------------------

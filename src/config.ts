@@ -52,6 +52,16 @@ export interface Config {
   daysForward: number;
   freezePastDays: number;
   intervalMinutes: number;
+  /**
+   * Full source-of-truth mirror. When true, the managed window
+   * [today−daysBack, today+daysForward] is reconciled against the
+   * calendar by CONTENT, not by creator: any remote item in that
+   * window that no longer corresponds to a fetched Outlook event is
+   * deleted, regardless of which tool created it. Past events within
+   * daysBack are eligible too (the window IS the freeze). Off by
+   * default — enabling it makes the remote calendar a strict mirror.
+   */
+  mirrorForeign: boolean;
 }
 
 export function serviceSvcUrl(cfg: Config): string {
@@ -121,6 +131,7 @@ export function loadConfig(): Config {
     daysForward: intSetting("ETE_LOOK_SYNC_DAYS_FORWARD", syncToml, "days_forward", 365),
     freezePastDays: intSetting("ETE_LOOK_SYNC_FREEZE_PAST_DAYS", syncToml, "freeze_past_days", 2),
     intervalMinutes: intSetting("ETE_LOOK_SYNC_INTERVAL_MINUTES", syncToml, "interval_minutes", 30),
+    mirrorForeign: boolSetting("ETE_LOOK_SYNC_MIRROR_FOREIGN", syncToml, "mirror_foreign", false),
   };
 }
 
@@ -189,6 +200,35 @@ function intSetting(
   if (typeof v === "string") {
     const n = Number(v);
     if (Number.isFinite(n)) return Math.trunc(n);
+  }
+  return defaultValue;
+}
+
+function boolSetting(
+  envVar: string,
+  section: Record<string, unknown>,
+  key: string,
+  defaultValue: boolean,
+): boolean {
+  const truthy = (s: string): boolean | null => {
+    const v = s.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(v)) return true;
+    if (["0", "false", "no", "off", ""].includes(v)) return false;
+    return null;
+  };
+  const env = process.env[envVar];
+  if (env !== undefined) {
+    const parsed = truthy(env);
+    if (parsed === null) {
+      throw new Error(`${envVar} must be a boolean; got ${JSON.stringify(env)}`);
+    }
+    return parsed;
+  }
+  const v = section[key];
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const parsed = truthy(v);
+    if (parsed !== null) return parsed;
   }
   return defaultValue;
 }

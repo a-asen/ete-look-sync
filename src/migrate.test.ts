@@ -38,6 +38,7 @@ function makeCfg(dbFile: string): Config {
     daysForward: 365,
     freezePastDays: 2,
     intervalMinutes: 30,
+    mirrorForeign: false,
   };
 }
 

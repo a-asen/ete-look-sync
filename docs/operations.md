@@ -186,3 +186,40 @@ ete-look-sync probe                            # session smoke-test + 7-day fetc
 4. Still failing → `ete-look-sync probe` to isolate session vs. backend.
 5. Capture a full run for a bug report:
    `systemctl --user start ete-look-sync.service && journalctl --user -u ete-look-sync.service -e`
+
+---
+
+## 5. Source-of-truth mirror (`mirror_foreign`)
+
+By default the sync only deletes items it created (UID ends
+`@ete-look-sync`); anything else in the collection is treated as a real
+event and left alone. Set `mirror_foreign = true` (env
+`ETE_LOOK_SYNC_MIRROR_FOREIGN`) to make the collection a **strict
+mirror of the source calendar** within the managed window
+(`days_back` past … `days_forward` future):
+
+- Any remote item in the window that does not correspond to a fetched
+  Outlook event is **deleted, regardless of who created it** (a
+  previous tool, a manual entry, an old duplicate).
+- Remote items that DO match a source event are adopted (recorded
+  against the event) so later edits update them in place instead of
+  re-creating.
+- Matching is by content — subject + start + end — computed the same
+  way from an Outlook event and from a remote ICS.
+- The window IS the freeze: past events within `days_back` are
+  eligible too, so late cancellations/reschedules land.
+- Anything outside the window is untouched.
+
+Deletion is aggressive: foreign/manual future entries in the window are
+removed. There is no per-item "keep" override — the source calendar is
+the single source of truth.
+
+Preview it safely before turning it on:
+
+```bash
+ete-look-sync sync-once --dry-run   # shows "would delete (mirror — not in source)"
+```
+
+The empty-fetch safety guard covers the prune pass too: if Exchange
+returns zero events, nothing is deleted unless `--allow-empty-fetch` is
+passed, so a failed/oversized window can't wipe the calendar.
