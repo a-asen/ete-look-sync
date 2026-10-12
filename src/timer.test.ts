@@ -122,9 +122,13 @@ test("runSetupTimer bakes the cfg's config + state paths into the service unit",
   assert.match(service, /Environment="ETE_LOOK_SYNC_STATE_DIR=\/custom\/ete-look-sync\/state"/);
 });
 
-test("renderServiceUnit wires OnFailure to the notify unit", () => {
+test("renderServiceUnit wires OnFailure in the [Unit] section", () => {
   const unit = renderServiceUnit("/x", "/node");
   assert.match(unit, /OnFailure=ete-look-sync-notify\.service/);
+  // OnFailure is a [Unit] directive; systemd ignores it inside
+  // [Service]. Guard against regressing it back below [Service].
+  const [unitSection] = unit.split("[Service]");
+  assert.match(unitSection!, /OnFailure=ete-look-sync-notify\.service/);
 });
 
 test("renderNotifyUnit degrades to a no-op when notify-send is absent", () => {

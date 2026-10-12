@@ -169,10 +169,14 @@ export function renderServiceUnit(
     .filter(([, value]) => value !== "")
     .map(([key, value]) => `Environment="${key}=${value}"\n`)
     .join("");
+  // OnFailure= is a [Unit] setting — putting it in [Service] makes
+  // systemd silently ignore it ("Unknown key ... ignoring"), so the
+  // failure notification never fired. Keep it above [Service].
   return `[Unit]
 Description=Outlook calendar → personal calendar sync (one-shot)
 After=network-online.target
 Wants=network-online.target
+OnFailure=${NOTIFY_NAME}
 
 [Service]
 Type=oneshot
@@ -180,7 +184,6 @@ ${envBlock}ExecStart=${nodePath} ${binPath} sync-once
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ete-look-sync
-OnFailure=${NOTIFY_NAME}
 
 [Install]
 WantedBy=default.target
